@@ -48,8 +48,6 @@ namespace BudgieRadio {
 		private GLib.Settings settings;
 
 		public RadioWidget(string uuid, GLib.Settings? settings) {
-			warning("RadioWidget constructor starting...\n");  // Debug
-
 			initialize(uuid, settings);
 
 			// Initialize our settings
@@ -59,33 +57,25 @@ namespace BudgieRadio {
 			var main_box = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
 			add(main_box);
 
-			warning("Building header...\n");  // Debug
 			// Build header (similar to wallpaper switcher example)
 			build_header();
 			main_box.pack_start(header_box, false, false, 0);
 
-			warning("Building content...\n");  // Debug
 			// Build content area
 			build_content();
 			main_box.pack_start(content_box, false, false, 0);
 
-			warning("Setting up D-Bus...\n");  // Debug
 			// Connect to D-Bus
 			setup_dbus();
 
-			warning("Loading presets...\n");  // Debug
 			// THEN load presets (needs D-Bus)
 			load_all_presets();
 
-			warning("Loading last station...\n");  // Debug
 			// Load last station from GSettings
 			load_last_station();
 
-			warning("Showing all widgets...\n");  // Debug
 			show_all();
 			update_visibility();
-
-			warning("RadioWidget constructor complete.\n");  // Debug
 		}
 
 		private void build_header() {
@@ -202,20 +192,16 @@ namespace BudgieRadio {
 			favorites_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 5);
 			favorites_box.halign = Gtk.Align.CENTER;
 
-			warning("Creating preset buttons...\n");  // Debug
-
 			// Create 5 preset buttons
 			preset_buttons = new Gtk.Button[5];
 			for (int i = 0; i < 5; i++) {
 				preset_buttons[i] = create_preset_button(i + 1);
 				preset_buttons[i].show();  // Explicitly show each button
 				favorites_box.pack_start(preset_buttons[i], true, true, 0);
-				warning(@"Created and packed preset button $(i+1)\n");  // Debug line
 			}
 
 			favorites_box.show();  // Explicitly show the container
 			content_box.pack_start(favorites_box, false, false, 5);
-			warning("Favorites box added to content\n");  // Debug
 
 			// Separator
 			var separator = new Gtk.Separator(Gtk.Orientation.HORIZONTAL);
@@ -248,10 +234,7 @@ namespace BudgieRadio {
 		}
 
 		private void load_all_presets() {
-			warning("load_all_presets() called\n");  // Debug
-
 			if (preset_buttons == null) {
-				warning("ERROR: preset_buttons is null!\n");
 				return;
 			}
 
@@ -259,8 +242,6 @@ namespace BudgieRadio {
 			for (int i = 0; i < 5; i++) {
 				int preset_num = i + 1;
 				string uuid = settings.get_string(@"favorite-$preset_num-uuid");
-
-				warning(@"Preset $preset_num UUID: '$uuid'\n");  // Debug
 
 				if (uuid != "") {
 					load_preset_info(preset_buttons[i], preset_num, uuid);
