@@ -20,8 +20,8 @@ widget_sources = files(
 )
 
 # Module name and install directory
-WIDGET_MODULE = 'org.budgie.raven.widget.radio-browser'
-RAVEN_PLUGIN_LIBDIR = join_paths(LIBDIR, 'budgie-desktop', 'plugins', WIDGET_MODULE)
+WIDGET_MODULE = 'org.ubuntubudgie.raven.widget.radio-browser'
+RAVEN_PLUGIN_LIBDIR = join_paths(LIBDIR, 'budgie-desktop', 'raven-plugins', WIDGET_MODULE)
 
 # Shared library for Raven widget
 shared_library(

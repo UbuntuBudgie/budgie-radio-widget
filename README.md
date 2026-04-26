@@ -43,6 +43,7 @@ The project consists of three components:
 - **Station icons** - Downloads and displays station logos
 - **Minimal Raven widget** - Doesn't block the UI with network operations
 - **Independent playback** - Close the browser, music keeps playing
+- **5 preset favorites** - Save up to 5 stations for one-click access (like car radio presets)
 
 ## Requirements
 
@@ -134,6 +135,9 @@ budgie-radio-widget/
 - `PlayStationDirect(s: name, s: url, s: favicon, s: codec, i: bitrate, s: country)` - Play with direct parameters
 - `StopPlayback()` - Stop playback
 - `GetCurrentStation() → s` - Get current station name
+- `GetCurrentStationUUID() → s` - Get current station UUID
+- `GetStationInfo(s: station_uuid) → a{sv}` - Get station details without playing (returns dict with name, url, favicon, codec, bitrate, country)
+- `GetLastStation() → a{sv}` - Get last played station details from GSettings
 
 **Signals:**
 - `NowPlaying(s: station_name, s: track_info, s: icon_url, s: codec, i: bitrate)` - Emitted on station/track change
