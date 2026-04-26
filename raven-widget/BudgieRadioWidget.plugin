@@ -1,0 +1,8 @@
+[Plugin]
+Module=liborg.ubuntubudgie.raven.widget.radio-browser.so
+Name=Radio Player
+Description=Display currently playing internet radio station
+Authors=Ubuntu Budgie Developers
+Copyright=Copyright © 2026
+Website=https://github.com/ubuntubudgie/budgie-radio-widget
+Icon=audio-x-generic

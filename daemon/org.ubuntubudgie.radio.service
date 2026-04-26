@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.ubuntubudgie.radio
+Exec=/usr/bin/radio-daemon

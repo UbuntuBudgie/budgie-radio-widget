@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<schemalist>
+  <schema id="org.ubuntubudgie.plugins.radio-browser" path="/org/ubuntubudgie/plugins/radio-browser/">
+    <key name="last-station-name" type="s">
+      <default>''</default>
+      <summary>Last played station name</summary>
+      <description>Name of the last played radio station</description>
+    </key>
+    <key name="last-station-url" type="s">
+      <default>''</default>
+      <summary>Last played station URL</summary>
+      <description>Stream URL of the last played radio station</description>
+    </key>
+    <key name="last-station-favicon" type="s">
+      <default>''</default>
+      <summary>Last played station icon</summary>
+      <description>Favicon URL of the last played radio station</description>
+    </key>
+    <key name="last-station-codec" type="s">
+      <default>''</default>
+      <summary>Last played station codec</summary>
+      <description>Audio codec of the last played radio station</description>
+    </key>
+    <key name="last-station-bitrate" type="i">
+      <default>0</default>
+      <summary>Last played station bitrate</summary>
+      <description>Bitrate of the last played radio station in kbps</description>
+    </key>
+    <key name="last-station-country" type="s">
+      <default>''</default>
+      <summary>Last played station country</summary>
+      <description>Country of the last played radio station</description>
+    </key>
+  </schema>
+</schemalist>

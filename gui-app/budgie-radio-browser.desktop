@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Radio Browser
+GenericName=Internet Radio Browser
+Comment=Browse and play internet radio stations
+Icon=radio
+Exec=budgie-radio-browser
+Terminal=false
+Categories=AudioVideo;Audio;Player;GTK;
+Keywords=radio;internet;streaming;music;
