@@ -424,8 +424,29 @@ namespace BudgieRadio {
 				load_icon_async(icon_url);
 			}
 
-			// Enable favorites menu when playing
-			favorites_menu_button.set_sensitive(true);
+			// Enable favorites menu only if we have a valid UUID
+			try {
+				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
+					"org.ubuntubudgie.radio",
+					"/org/ubuntubudgie/radio/Daemon"
+				);
+				string uuid = proxy.get_current_station_uuid();
+
+				// Only enable if UUID is not empty and not "direct"
+				bool has_valid_uuid = (uuid != "" && uuid != "direct");
+				favorites_menu_button.set_sensitive(has_valid_uuid);
+
+				if (has_valid_uuid) {
+					favorites_menu_button.set_tooltip_text("Add to presets");
+				} else {
+					favorites_menu_button.set_tooltip_text("Play from browser to add to presets");
+				}
+
+				print(@"UUID: '$uuid', menu enabled: $has_valid_uuid\n");  // Debug
+			} catch (Error e) {
+				warning("Failed to get UUID: %s", e.message);
+				favorites_menu_button.set_sensitive(false);
+			}
 		}
 
 		private void on_playback_stopped_signal(
@@ -572,6 +593,10 @@ namespace BudgieRadio {
 					load_icon_async(favicon);
 				}
 			}
+
+			// Ensure menu button stays disabled (no UUID yet)
+			favorites_menu_button.set_sensitive(false);
+			favorites_menu_button.set_tooltip_text("Play from browser to add to presets");
 		}
 
 		private void on_browse_clicked() {
