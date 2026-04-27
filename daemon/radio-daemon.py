@@ -65,6 +65,7 @@ class RadioDaemon(dbus.service.Object):
         self.current_station: Optional[RadioStation] = None
         self.radio_client = None
         self.player = None
+        self.is_paused = False
 
         # GSettings for saving last station
         self.settings = Gio.Settings.new("org.ubuntubudgie.plugins.radio-browser")
@@ -106,6 +107,9 @@ class RadioDaemon(dbus.service.Object):
     def _setup_player(self):
         """Initialize GStreamer playbin"""
         self.player = Gst.ElementFactory.make("playbin", "player")
+
+        # Enable buffering for pause/resume
+        self.player.set_property("buffer-size", 5 * 1024 * 1024)  # 5MB buffer
 
         # Connect to bus for tag messages
         bus = self.player.get_bus()
@@ -162,7 +166,33 @@ class RadioDaemon(dbus.service.Object):
             self.player.set_state(Gst.State.NULL)
 
         self.current_station = None
+        self.is_paused = False
         self.PlaybackStopped()
+
+    @dbus.service.method(INTERFACE, out_signature='')
+    def PausePlayback(self):
+        """Pause current playback (keeps buffering)"""
+        print("PausePlayback called")
+
+        if self.player and not self.is_paused:
+            self.player.set_state(Gst.State.PAUSED)
+            self.is_paused = True
+            self.PlaybackPaused()
+
+    @dbus.service.method(INTERFACE, out_signature='')
+    def ResumePlayback(self):
+        """Resume playback from buffer"""
+        print("ResumePlayback called")
+
+        if self.player and self.is_paused:
+            self.player.set_state(Gst.State.PLAYING)
+            self.is_paused = False
+            # Re-emit NowPlaying signal with current station info
+            if self.current_station:
+                self.NowPlaying(
+                    self.current_station.name, "", self.current_station.favicon,
+                    self.current_station.codec, self.current_station.bitrate
+                )
 
     @dbus.service.method(INTERFACE, out_signature='s')
     def GetCurrentStation(self):
@@ -171,12 +201,22 @@ class RadioDaemon(dbus.service.Object):
             return self.current_station.name
         return ""
 
+    @dbus.service.method(INTERFACE, out_signature='b')
+    def IsPaused(self):
+        """Return whether playback is currently paused"""
+        return self.is_paused
+
     @dbus.service.method(INTERFACE, out_signature='s')
     def GetCurrentStationUUID(self):
         """Return current station UUID or empty string"""
         if self.current_station:
             return self.current_station.uuid
         return ""
+
+    @dbus.service.signal(INTERFACE)
+    def PlaybackPaused(self):
+        """Emitted when playback is paused"""
+        pass
 
     @dbus.service.method(INTERFACE, out_signature='a{sv}')
     def GetLastStation(self):

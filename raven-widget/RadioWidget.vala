@@ -31,7 +31,9 @@ namespace BudgieRadio {
 		private Gtk.Label codec_label;
 		private Gtk.Button browse_button;
 		private Gtk.Button toggle_button;
+		private Gtk.Button pause_button;
 		private Gtk.Image play_icon;
+		private Gtk.Image pause_icon;
 		private Gtk.Image stop_icon;
 		private Gtk.Box header_box;
 		private Gtk.Box content_box;
@@ -43,8 +45,10 @@ namespace BudgieRadio {
 		private GLib.DBusConnection? bus_connection;
 		private uint now_playing_subscription = 0;
 		private uint playback_stopped_subscription = 0;
+		private uint playback_paused_subscription = 0;
 
 		private bool is_playing = false;
+		private bool is_paused = false;
 		private GLib.Settings settings;
 
 		public RadioWidget(string uuid, GLib.Settings? settings) {
@@ -94,11 +98,28 @@ namespace BudgieRadio {
 			var title_label = new Gtk.Label("Radio Player");
 			header_box.add(title_label);
 
-			// Toggle button (play/stop combined)
-			play_icon = new Gtk.Image.from_icon_name(
-				"media-playback-start-symbolic",
+			// Pause button
+			pause_icon = new Gtk.Image.from_icon_name(
+				"media-playback-pause-symbolic",
 				Gtk.IconSize.MENU
 			);
+ 			play_icon = new Gtk.Image.from_icon_name(
+ 				"media-playback-start-symbolic",
+ 				Gtk.IconSize.MENU
+ 			);
+
+			pause_button = new Gtk.Button();
+			pause_button.set_image(pause_icon);
+			pause_button.set_tooltip_text("Pause playback");
+			pause_button.get_style_context().add_class("flat");
+			pause_button.get_style_context().add_class("expander-button");
+			pause_button.margin = 4;
+			pause_button.valign = Gtk.Align.CENTER;
+			pause_button.clicked.connect(on_pause_clicked);
+			pause_button.set_sensitive(false);  // Disabled until playing
+			header_box.pack_end(pause_button, false, false, 0);
+
+			// Toggle button (play/stop combined)
 			stop_icon = new Gtk.Image.from_icon_name(
 				"media-playback-stop-symbolic",
 				Gtk.IconSize.MENU
@@ -288,6 +309,17 @@ namespace BudgieRadio {
 					button.set_sensitive(false);
 				}
 
+				// Subscribe to PlaybackPaused signal
+				playback_paused_subscription = bus_connection.signal_subscribe(
+					"org.ubuntubudgie.radio",
+					"org.ubuntubudgie.radio.Daemon",
+					"PlaybackPaused",
+					"/org/ubuntubudgie/radio/Daemon",
+					null,
+					GLib.DBusSignalFlags.NONE,
+					on_playback_paused_signal
+				);
+
 			} catch (Error e) {
 				warning("Failed to load preset info: %s", e.message);
 				button.set_tooltip_text("Error loading station");
@@ -393,6 +425,7 @@ namespace BudgieRadio {
 
 			// Update UI
 			is_playing = true;
+			is_paused = false;
 			station_label.set_text(station_name);
 			track_label.set_text(track_info);
 			codec_label.set_text(@"$codec $bitrate kbps");
@@ -440,6 +473,7 @@ namespace BudgieRadio {
 		) {
 			// Reset UI
 			is_playing = false;
+			is_paused = false;
 			current_playing_uuid = "";
 			station_label.set_text("No station playing");
 			track_label.set_text("");
@@ -453,15 +487,43 @@ namespace BudgieRadio {
 			favorites_menu_button.set_sensitive(false);
 		}
 
+		private void on_playback_paused_signal(
+			GLib.DBusConnection connection,
+			string? sender_name,
+			string object_path,
+			string interface_name,
+			string signal_name,
+			Variant parameters
+		) {
+			// Update UI for paused state
+			is_paused = true;
+			track_label.set_text("⏸ Paused");
+			update_visibility();
+		}
+
 		private void update_visibility() {
-			// Update toggle button icon and tooltip based on playback state
-			if (is_playing) {
+			// Update toggle button and pause button based on playback state
+			if (is_playing && !is_paused) {
+				// Playing state
+ 				toggle_button.set_image(stop_icon);
+ 				toggle_button.set_tooltip_text("Stop playback");
+				pause_button.set_image(pause_icon);
+				pause_button.set_tooltip_text("Pause playback");
+				pause_button.set_sensitive(true);
+ 				station_icon.get_style_context().remove_class("dim-label");
+			} else if (is_paused) {
+				// Paused state
 				toggle_button.set_image(stop_icon);
 				toggle_button.set_tooltip_text("Stop playback");
-				station_icon.get_style_context().remove_class("dim-label");
-			} else {
-				toggle_button.set_image(play_icon);
-				toggle_button.set_tooltip_text("Play last station");
+				pause_button.set_image(play_icon);
+				pause_button.set_tooltip_text("Resume playback");
+				pause_button.set_sensitive(true);
+				station_icon.get_style_context().add_class("dim-label");
+ 			} else {
+				// Stopped state
+ 				toggle_button.set_image(play_icon);
+ 				toggle_button.set_tooltip_text("Play last station");
+				pause_button.set_sensitive(false);
 				station_icon.get_style_context().add_class("dim-label");
 			}
 		}
@@ -519,6 +581,25 @@ namespace BudgieRadio {
 					warning("Failed to load station icon: %s", e.message);
 				}
 			});
+		}
+
+		private void on_pause_clicked() {
+			try {
+				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
+					"org.ubuntubudgie.radio",
+					"/org/ubuntubudgie/radio/Daemon"
+				);
+
+				if (is_paused) {
+					// Resume playback
+					proxy.resume_playback();
+				} else {
+					// Pause playback
+					proxy.pause_playback();
+				}
+			} catch (Error e) {
+				warning("Failed to pause/resume: %s", e.message);
+			}
 		}
 
 		private void on_toggle_clicked() {
@@ -598,6 +679,9 @@ namespace BudgieRadio {
 				if (playback_stopped_subscription != 0) {
 					bus_connection.signal_unsubscribe(playback_stopped_subscription);
 				}
+				if (playback_paused_subscription != 0) {
+					bus_connection.signal_unsubscribe(playback_paused_subscription);
+				}
 			}
 		}
 	}
@@ -608,6 +692,12 @@ namespace BudgieRadio {
 interface RadioDaemonProxy : Object {
 	[DBus (name = "StopPlayback")]
 	public abstract void stop_playback() throws Error;
+
+	[DBus (name = "PausePlayback")]
+	public abstract void pause_playback() throws Error;
+
+	[DBus (name = "ResumePlayback")]
+	public abstract void resume_playback() throws Error;
 
 	[DBus (name = "PlayStation")]
 	public abstract void play_station(string uuid) throws Error;
