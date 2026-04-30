@@ -13,6 +13,9 @@ import sys
 import signal
 import threading
 import asyncio
+import tempfile
+import os
+from pathlib import Path
 from typing import Optional
 
 import dbus
@@ -28,17 +31,25 @@ except ImportError:
     print("Warning: 'radios' library not found.")
     print("Install with: sudo apt install python3-radios")
 
+# Default values for missing station data
+DEFAULT_STATION_NAME = "Unknown Station"
+DEFAULT_CODEC = "Unknown"
+DEFAULT_COUNTRY = ""
+DEFAULT_FAVICON = ""
+DEFAULT_URL = ""
+DEFAULT_BITRATE = 0
 
 class RadioStation:
     """Simple station data class"""
     def __init__(self, uuid, name, url, favicon, codec, bitrate, country):
         self.uuid = uuid
-        self.name = name
-        self.url = url
-        self.favicon = favicon
-        self.codec = codec
-        self.bitrate = bitrate
-        self.country = country
+        # Apply defaults for None values at construction
+        self.name = name or DEFAULT_STATION_NAME
+        self.url = url or DEFAULT_URL
+        self.favicon = favicon or DEFAULT_FAVICON
+        self.codec = codec or DEFAULT_CODEC
+        self.bitrate = bitrate or DEFAULT_BITRATE
+        self.country = country or DEFAULT_COUNTRY
 
 
 class RadioDaemon(dbus.service.Object):
@@ -65,7 +76,14 @@ class RadioDaemon(dbus.service.Object):
         self.current_station: Optional[RadioStation] = None
         self.radio_client = None
         self.player = None
+        self.recorder = None
+        self.record_file = None
+        self.record_start_time = 0
+        self.max_buffer_duration = 3600  # 1 hour in seconds
+        self.max_buffer_size = 200 * 1024 * 1024  # 200MB for encoded audio
         self.is_paused = False
+        self.is_playing_from_buffer = False
+        self.auto_resume_timeout = None
 
         # GSettings for saving last station
         self.settings = Gio.Settings.new("org.ubuntubudgie.plugins.radio-browser")
@@ -83,6 +101,12 @@ class RadioDaemon(dbus.service.Object):
             self._start_async_loop()
 
         print(f"Radio daemon started on {self.OBJECT_PATH}")
+
+        # Create temp directory for recordings in XDG_RUNTIME_DIR (secure, per-user)
+        runtime_dir = os.environ.get('XDG_RUNTIME_DIR', f'/run/user/{os.getuid()}')
+        self.temp_dir = Path(runtime_dir) / "budgie-radio-buffer"
+        self.temp_dir.mkdir(exist_ok=True, mode=0o700)  # Owner only
+        print(f"Buffer directory: {self.temp_dir}")
 
     def _start_async_loop(self):
         """Start asyncio event loop in a separate thread"""
@@ -108,14 +132,117 @@ class RadioDaemon(dbus.service.Object):
         """Initialize GStreamer playbin"""
         self.player = Gst.ElementFactory.make("playbin", "player")
 
-        # Enable buffering for pause/resume
-        self.player.set_property("buffer-size", 5 * 1024 * 1024)  # 5MB buffer
+        # Enable progressive download for better seeking
+        self.player.set_property("buffer-size", 10 * 1024 * 1024)
+        self.player.set_property("buffer-duration", 5 * Gst.SECOND)
 
         # Connect to bus for tag messages
         bus = self.player.get_bus()
         bus.add_signal_watch()
         bus.connect("message::tag", self._on_tag_message)
         bus.connect("message::error", self._on_error_message)
+        bus.connect("message::buffering", self._on_buffering_message)
+
+    def _setup_recorder(self, stream_url):
+        """Setup recording pipeline for rolling buffer"""
+        # Stop any existing recorder
+        if self.recorder:
+            self.recorder.set_state(Gst.State.NULL)
+            self.recorder = None
+
+        # Create new temp file for this recording (overwrite old one)
+        if self.record_file and os.path.exists(self.record_file):
+            try:
+                os.unlink(self.record_file)
+            except Exception as e:
+                print(f"Warning: Could not delete old buffer file: {e}")
+
+        station_id = self.current_station.uuid if self.current_station else "unknown"
+        # Use .mkv for Matroska container - supports seeking and various codecs
+        self.record_file = str(self.temp_dir / f"buffer_{station_id}.mkv")
+
+        print(f"\n=== RECORDER SETUP ===")
+        print(f"  Record file: {self.record_file}")
+
+        # Create proper recording pipeline with tee
+        # souphttpsrc → decodebin → audioconvert → vorbisenc → matroskamux → filesink
+        pipeline_str = f"""
+            souphttpsrc location="{stream_url}" !
+            decodebin name=dec
+            dec. ! audioconvert ! audioresample !
+            tee name=t
+            t. ! queue ! vorbisenc ! matroskamux ! filesink location="{self.record_file}"
+        """
+
+        print(f"  Pipeline: {pipeline_str.strip()}")
+
+        try:
+            self.recorder = Gst.parse_launch(pipeline_str)
+
+            # Connect to bus for errors
+            rec_bus = self.recorder.get_bus()
+            rec_bus.add_signal_watch()
+            rec_bus.connect("message::error", self._on_recorder_error)
+
+            self.recorder.set_state(Gst.State.PLAYING)
+            self.record_start_time = GLib.get_monotonic_time() / 1000000  # seconds
+
+            print(f"  Recorder state: PLAYING")
+            print(f"  Record start time: {self.record_start_time}")
+            print(f"=== RECORDER STARTED ===\n")
+
+            # Monitor file size to implement rolling buffer
+            GLib.timeout_add_seconds(10, self._check_buffer_size)
+
+        except Exception as e:
+            print(f"Failed to setup recorder: {e}")
+            import traceback
+            traceback.print_exc()
+            self.recorder = None
+
+    def _on_recorder_error(self, bus, message):
+        """Handle recording pipeline errors"""
+        err, debug = message.parse_error()
+        print(f"\n=== RECORDER ERROR ===")
+        print(f"Recording error: {err.message}")
+        print(f"Debug: {debug}\n")
+
+    def _check_buffer_size(self):
+        """Check buffer file size and implement simple rolling buffer"""
+        if not self.recorder or not self.record_file or not os.path.exists(self.record_file):
+            return False  # Stop checking
+
+        try:
+            file_size = os.path.getsize(self.record_file)
+
+            if file_size % (10 * 1024 * 1024) < 100000:  # Log every ~10MB
+                print(f"[BUFFER] File size: {file_size/1024/1024:.2f}MB")
+
+            # If file exceeds max size, restart recording (simple rolling buffer)
+            if file_size > self.max_buffer_size:
+                print(f"Buffer file reached {file_size/1024/1024:.1f}MB, restarting...")
+
+                # Save current station URL
+                station_url = self.current_station.url if self.current_station else None
+
+                if station_url:
+                    # Stop current recorder
+                    self.recorder.set_state(Gst.State.NULL)
+
+                    # Delete old file
+                    try:
+                        os.unlink(self.record_file)
+                    except:
+                        pass
+
+                    # Restart recording
+                    self._setup_recorder(station_url)
+
+        except Exception as e:
+            print(f"Error checking buffer size: {e}")
+
+        # Continue checking
+        return True
 
     # D-Bus Methods (called by GUI app)
 
@@ -162,11 +289,26 @@ class RadioDaemon(dbus.service.Object):
         """Stop current playback"""
         print("StopPlayback called")
 
+        # Cancel any pending auto-resume
+        if self.auto_resume_timeout:
+            GLib.source_remove(self.auto_resume_timeout)
+            self.auto_resume_timeout = None
+
+        # Stop recording
+        if self.recorder:
+            self.recorder.set_state(Gst.State.NULL)
+            self.recorder = None
+
         if self.player:
             self.player.set_state(Gst.State.NULL)
 
         self.current_station = None
         self.is_paused = False
+        self.is_playing_from_buffer = False
+
+        # Keep the buffer file - don't delete it
+        # It will be overwritten when next station plays
+
         self.PlaybackStopped()
 
     @dbus.service.method(INTERFACE, out_signature='')
@@ -179,10 +321,17 @@ class RadioDaemon(dbus.service.Object):
             self.is_paused = True
             self.PlaybackPaused()
 
+            # Recording continues in background
+
     @dbus.service.method(INTERFACE, out_signature='')
     def ResumePlayback(self):
-        """Resume playback from buffer"""
+        """Resume playback from current position"""
         print("ResumePlayback called")
+
+        # Cancel any pending auto-resume
+        if self.auto_resume_timeout:
+            GLib.source_remove(self.auto_resume_timeout)
+            self.auto_resume_timeout = None
 
         if self.player and self.is_paused:
             self.player.set_state(Gst.State.PLAYING)
@@ -190,9 +339,326 @@ class RadioDaemon(dbus.service.Object):
             # Re-emit NowPlaying signal with current station info
             if self.current_station:
                 self.NowPlaying(
-                    self.current_station.name, "", self.current_station.favicon,
-                    self.current_station.codec, self.current_station.bitrate
+                    self.current_station.name,
+                    "",
+                    self.current_station.favicon,
+                    self.current_station.codec,
+                    self.current_station.bitrate
                 )
+
+    @dbus.service.method(INTERFACE, in_signature='x', out_signature='')
+    def SeekRelative(self, offset_seconds):
+        """
+        Seek relative to current position
+        offset_seconds: seconds to skip (negative = backwards, positive = forwards)
+        """
+        print(f"\n=== SEEK RELATIVE CALLED ===")
+        print(f"  Offset: {offset_seconds} seconds")
+        print(f"  Currently playing from buffer: {self.is_playing_from_buffer}")
+
+        if not self.player:
+            print("  ERROR: No player!")
+            return
+
+        # Cancel any pending auto-resume
+        if self.auto_resume_timeout:
+            GLib.source_remove(self.auto_resume_timeout)
+            self.auto_resume_timeout = None
+
+        # If seeking backward and not already playing from buffer, switch to buffer
+        if offset_seconds < 0 and not self.is_playing_from_buffer:
+            print("  Switching to buffer playback first...")
+            self._switch_to_buffer_playback()
+            # Give it a moment to load, then seek
+            GLib.timeout_add(200, lambda: self._do_seek(offset_seconds))
+        else:
+            print("  Seeking directly...")
+            self._do_seek(offset_seconds)
+
+        # Auto-resume after 0.7 seconds
+        print(f"  Auto-resume scheduled in 700ms")
+        self.auto_resume_timeout = GLib.timeout_add(700, self._auto_resume)
+
+    def _auto_resume(self):
+        """Auto-resume playback after scrubbing"""
+        print(f"\n=== AUTO-RESUME TRIGGERED ===")
+        print(f"  Is paused: {self.is_paused}")
+        if self.is_paused:
+            print("  Auto-resuming playback after scrub")
+            self.ResumePlayback()
+        else:
+            print("  Already playing, not resuming")
+        self.auto_resume_timeout = None
+        return False  # Don't repeat
+
+    def _do_seek(self, offset_seconds):
+        """Actually perform the seek"""
+        print(f"\n=== DO SEEK ===")
+        print(f"  Offset: {offset_seconds} seconds")
+
+        if not self.player:
+            print("  ERROR: No player!")
+            return False
+
+        # Pause playback during seek
+        was_playing = not self.is_paused
+        print(f"  Was playing: {was_playing}")
+
+        if was_playing:
+            print("  Pausing for seek...")
+            self.player.set_state(Gst.State.PAUSED)
+            self.is_paused = True
+            self.PlaybackPaused()
+
+        if self.is_playing_from_buffer:
+            # Seeking within buffer file
+            position = self.player.query_position(Gst.Format.TIME)
+            print(f"  Position query successful: {position[0]}")
+
+            if position[0]:
+                current_pos = position[1]
+                current_sec = current_pos / Gst.SECOND
+                new_pos = current_pos + (offset_seconds * Gst.SECOND)
+                new_sec = new_pos / Gst.SECOND
+
+                print(f"  Current position: {current_sec:.2f}s ({current_pos} ns)")
+                print(f"  Target position: {new_sec:.2f}s ({new_pos} ns)")
+
+                # Clamp to valid range (start at 0)
+                new_pos = max(0, new_pos)
+
+                # Get actual file duration for upper bound
+                duration = self.player.query_duration(Gst.Format.TIME)
+                print(f"  Duration query successful: {duration[0]}")
+
+                if duration[0]:
+                    dur_sec = duration[1] / Gst.SECOND
+                    print(f"  File duration: {dur_sec:.2f}s ({duration[1]} ns)")
+                    new_pos = min(new_pos, duration[1])
+                else:
+                    print("  WARNING: Could not get duration!")
+
+                final_sec = new_pos / Gst.SECOND
+                print(f"  Final seek position: {final_sec:.2f}s")
+
+                print(f"  Performing seek...")
+                self.player.seek_simple(
+                    Gst.Format.TIME,
+                    Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+                    new_pos
+                )
+                print(f"  Seek command sent")
+            else:
+                print("  ERROR: Could not query position!")
+        else:
+            print("  Not playing from buffer, seek skipped")
+
+        print(f"=== DO SEEK COMPLETE ===\n")
+
+        return False
+
+    def _switch_to_buffer_playback(self):
+        """Switch from live stream to playing from buffer file"""
+        print(f"\n=== SWITCH TO BUFFER PLAYBACK ===")
+
+        if not self.record_file or not os.path.exists(self.record_file):
+            print("  ERROR: No buffer file available!")
+            print(f"  Record file: {self.record_file}")
+            print(f"  Exists: {os.path.exists(self.record_file) if self.record_file else False}")
+            return
+
+        # Wait a moment for file to have some content
+        file_size = os.path.getsize(self.record_file)
+        print(f"  Buffer file size: {file_size/1024:.2f} KB")
+
+        if file_size < 100000:  # Less than 100KB
+            print(f"  WARNING: Buffer file too small ({file_size} bytes), may not work well")
+
+        print(f"  Stopping live playback...")
+        print(f"  Current URI: {self.player.get_property('uri')}")
+
+        # Switch player to buffer file
+        self.player.set_state(Gst.State.NULL)
+        print(f"  Player state: NULL")
+
+        buffer_uri = f"file://{self.record_file}"
+        print(f"  New URI: {buffer_uri}")
+        self.player.set_property("uri", buffer_uri)
+
+        print(f"  Setting player to PAUSED...")
+        self.player.set_state(Gst.State.PAUSED)
+
+        # Give it a moment to open the file
+        print(f"  Scheduling seek to buffer end in 100ms...")
+        GLib.timeout_add(100, self._seek_to_buffer_end)
+
+        print(f"=== SWITCH TO BUFFER INITIATED ===\n")
+
+    def _seek_to_buffer_end(self):
+        """Seek to end of buffer file after opening"""
+        print(f"\n=== SEEK TO BUFFER END ===")
+
+        # Query the file duration
+        duration = self.player.query_duration(Gst.Format.TIME)
+        print(f"  Duration query successful: {duration[0]}")
+
+        if duration[0] and duration[1] > 0:
+            dur_sec = duration[1] / Gst.SECOND
+            print(f"  File duration: {dur_sec:.2f}s ({duration[1]} ns)")
+
+            # Seek to near the end (leave 1 second buffer)
+            end_pos = max(0, duration[1] - Gst.SECOND)
+            end_sec = end_pos / Gst.SECOND
+            print(f"  Target position (end - 1s): {end_sec:.2f}s")
+
+            print(f"  Performing seek...")
+            self.player.seek_simple(
+                Gst.Format.TIME,
+                Gst.SeekFlags.FLUSH | Gst.SeekFlags.ACCURATE,
+                end_pos
+            )
+            print(f"  Seek command sent")
+
+            self.is_playing_from_buffer = True
+            print(f"  is_playing_from_buffer = True")
+
+            if not self.is_paused:
+                self.is_paused = True
+                print(f"  Emitting PlaybackPaused signal")
+                self.PlaybackPaused()
+        else:
+            print("  ERROR: Could not query buffer duration!")
+            if duration[0]:
+                print(f"    Duration value: {duration[1]}")
+
+        print(f"=== SEEK TO BUFFER END COMPLETE ===\n")
+
+        return False
+
+    @dbus.service.method(INTERFACE, out_signature='')
+    def SeekToLive(self):
+        """Jump to live edge of stream and resume playback"""
+        print(f"\n=== SEEK TO LIVE ===")
+
+        if not self.player:
+            print("  ERROR: No player!")
+            return
+
+        print(f"  Currently playing from buffer: {self.is_playing_from_buffer}")
+
+        # Cancel any pending auto-resume
+        if self.auto_resume_timeout:
+            print("  Cancelling auto-resume timeout")
+            GLib.source_remove(self.auto_resume_timeout)
+            self.auto_resume_timeout = None
+
+        # If playing from buffer, switch back to live stream
+        if self.is_playing_from_buffer:
+            print("  Switching back to live stream...")
+            self._switch_to_live_playback()
+        else:
+            print("  Already on live stream")
+
+        # Resume if paused
+        if self.is_paused:
+            print("  Resuming playback...")
+            self.player.set_state(Gst.State.PLAYING)
+            self.is_paused = False
+            if self.current_station:
+                self.NowPlaying(
+                    self.current_station.name,
+                    "",
+                    self.current_station.favicon,
+                    self.current_station.codec,
+                    self.current_station.bitrate
+                )
+
+        print(f"=== SEEK TO LIVE COMPLETE ===\n")
+
+    def _switch_to_live_playback(self):
+        """Switch from buffer file back to live stream"""
+        print(f"\n=== SWITCH TO LIVE PLAYBACK ===")
+
+        if not self.current_station:
+            print("  ERROR: No current station!")
+            return
+
+        print(f"  Live URL: {self.current_station.url}")
+        print(f"  Stopping buffer playback...")
+
+        # Switch back to live URL
+        self.player.set_state(Gst.State.NULL)
+        print(f"  Player state: NULL")
+
+        self.player.set_property("uri", self.current_station.url)
+        print(f"  Setting player to PLAYING...")
+        self.player.set_state(Gst.State.PLAYING)
+
+        self.is_playing_from_buffer = False
+        print(f"  is_playing_from_buffer = False")
+        print(f"=== SWITCH TO LIVE COMPLETE ===\n")
+
+    @dbus.service.method(INTERFACE, out_signature='x')
+    def GetBufferDuration(self):
+        """Return available buffer duration in seconds"""
+        return self._get_buffer_duration_internal()
+
+    def _get_buffer_duration_internal(self):
+        """Internal method to get buffer duration"""
+        if not self.record_file or not os.path.exists(self.record_file):
+            return 0
+
+        # If playing from buffer, query the actual file duration
+        if self.is_playing_from_buffer and self.player:
+            duration = self.player.query_duration(Gst.Format.TIME)
+            if duration[0]:
+                dur_sec = duration[1] // Gst.SECOND
+                # Debug log occasionally
+                import random
+                if random.random() < 0.1:  # 10% of calls
+                    print(f"[DEBUG] GetBufferDuration (from file): {dur_sec}s")
+                return dur_sec
+
+        # Otherwise calculate based on recording time
+        current_time = GLib.get_monotonic_time() / 1000000
+        elapsed = current_time - self.record_start_time
+
+        # Cap at max duration
+        return min(int(elapsed), self.max_buffer_duration)
+
+    @dbus.service.method(INTERFACE, out_signature='x')
+    def GetCurrentPosition(self):
+        """Return current playback position (seconds from start of buffer)"""
+        if not self.player:
+            return 0
+
+        if not self.is_playing_from_buffer:
+            # If playing live, we're at the "end" of the buffer
+            return self._get_buffer_duration_internal()
+
+        # Playing from buffer file - get actual position
+        position = self.player.query_position(Gst.Format.TIME)
+        if not position[0]:
+            return 0
+
+        pos_sec = position[1] // Gst.SECOND
+        # Debug log occasionally
+        import random
+        if random.random() < 0.1:  # 10% of calls
+            print(f"[DEBUG] GetCurrentPosition: {pos_sec}s")
+        return pos_sec
+
+    @dbus.service.method(INTERFACE, out_signature='x')
+    def GetTimeBehindLive(self):
+        """Return how many seconds behind live we are"""
+        buffer_duration = self._get_buffer_duration_internal()
+        current_pos = self.GetCurrentPosition()
+        return buffer_duration - current_pos
+
+    @dbus.service.method(INTERFACE, out_signature='b')
+    def IsPaused(self):
+        """Return whether playback is currently paused"""
+        return self.is_paused
 
     @dbus.service.method(INTERFACE, out_signature='s')
     def GetCurrentStation(self):
@@ -201,22 +667,12 @@ class RadioDaemon(dbus.service.Object):
             return self.current_station.name
         return ""
 
-    @dbus.service.method(INTERFACE, out_signature='b')
-    def IsPaused(self):
-        """Return whether playback is currently paused"""
-        return self.is_paused
-
     @dbus.service.method(INTERFACE, out_signature='s')
     def GetCurrentStationUUID(self):
         """Return current station UUID or empty string"""
         if self.current_station:
             return self.current_station.uuid
         return ""
-
-    @dbus.service.signal(INTERFACE)
-    def PlaybackPaused(self):
-        """Emitted when playback is paused"""
-        pass
 
     @dbus.service.method(INTERFACE, out_signature='a{sv}')
     def GetLastStation(self):
@@ -280,6 +736,11 @@ class RadioDaemon(dbus.service.Object):
         """Emitted when playback stops"""
         pass
 
+    @dbus.service.signal(INTERFACE)
+    def PlaybackPaused(self):
+        """Emitted when playback is paused"""
+        pass
+
     # Internal async methods
 
     async def _play_station_async(self, station_uuid):
@@ -290,10 +751,10 @@ class RadioDaemon(dbus.service.Object):
 
             # Convert to our station object
             station = RadioStation(
-                uuid=station_data.uuid,  # Use uuid, not id
+                uuid=station_data.uuid,
                 name=station_data.name,
                 url=station_data.url_resolved or station_data.url,
-                favicon=station_data.favicon or "",
+                favicon=station_data.favicon,
                 codec=station_data.codec,
                 bitrate=station_data.bitrate,
                 country=station_data.country
@@ -357,6 +818,10 @@ class RadioDaemon(dbus.service.Object):
         # Set URI and play
         self.player.set_state(Gst.State.NULL)
         self.player.set_property("uri", station.url)
+
+        # Start recording buffer
+        self._setup_recorder(station.url)
+
         self.player.set_state(Gst.State.PLAYING)
 
         # Emit initial signal (no track info yet)
@@ -416,8 +881,30 @@ class RadioDaemon(dbus.service.Object):
         # Stop playback on error
         self.StopPlayback()
 
+    def _on_buffering_message(self, bus, message):
+        """Handle buffering messages"""
+        percent = message.parse_buffering()
+        print(f"[BUFFERING] {percent}%")
+
+        # Pause during buffering if not already paused
+        if percent < 100 and not self.is_paused:
+            self.player.set_state(Gst.State.PAUSED)
+        elif percent == 100 and not self.is_paused:
+            self.player.set_state(Gst.State.PLAYING)
+
     def shutdown(self):
         """Clean shutdown"""
+        # Stop recording
+        if self.recorder:
+            self.recorder.set_state(Gst.State.NULL)
+
+        # Clean up temp files
+        if self.record_file and os.path.exists(self.record_file):
+            try:
+                os.unlink(self.record_file)
+            except:
+                pass
+
         if self.async_loop:
             self.async_loop.call_soon_threadsafe(self.async_loop.stop)
 

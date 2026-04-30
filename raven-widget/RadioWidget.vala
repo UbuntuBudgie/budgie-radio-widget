@@ -29,6 +29,12 @@ namespace BudgieRadio {
 		private Gtk.Label station_label;
 		private Gtk.Label track_label;
 		private Gtk.Label codec_label;
+		private Gtk.Box scrub_overlay;
+		private Gtk.Revealer scrub_revealer;
+		private Gtk.Scale scrub_scale;
+		private Gtk.Label buffer_label;
+		private Gtk.EventBox track_eventbox;
+		private bool scrub_overlay_visible = false;
 		private Gtk.Button browse_button;
 		private Gtk.Button toggle_button;
 		private Gtk.Button pause_button;
@@ -50,6 +56,8 @@ namespace BudgieRadio {
 		private bool is_playing = false;
 		private bool is_paused = false;
 		private GLib.Settings settings;
+		private bool updating_scrubber = false;
+		private uint scrubber_update_timeout = 0;
 
 		public RadioWidget(string uuid, GLib.Settings? settings) {
 			initialize(uuid, settings);
@@ -183,13 +191,79 @@ namespace BudgieRadio {
 			// Store reference to enable/disable when playback state changes
 			this.favorites_menu_button = menu_button;
 
-			// Track info label
+			// Track info area with hover-activated scrubber overlay
+			var track_container = new Gtk.Box(Gtk.Orientation.VERTICAL, 0);
+
 			track_label = new Gtk.Label("");
 			track_label.halign = Gtk.Align.START;
 			track_label.wrap = true;
 			track_label.max_width_chars = 30;
 			track_label.get_style_context().add_class("dim-label");
-			content_box.pack_start(track_label, false, false, 2);
+			track_container.pack_start(track_label, false, false, 0);
+
+			// Scrub overlay in a revealer (revealed on hover when playing or paused)
+			scrub_revealer = new Gtk.Revealer();
+			scrub_revealer.set_transition_type(Gtk.RevealerTransitionType.SLIDE_DOWN);
+			scrub_revealer.set_transition_duration(200);
+
+			scrub_overlay = new Gtk.Box(Gtk.Orientation.VERTICAL, 2);
+			scrub_overlay.valign = Gtk.Align.CENTER;
+			scrub_overlay.margin_top = 5;
+
+			var scrub_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 5);
+
+			// Back 15s button
+			var back_btn = new Gtk.Button.with_label("◄◄15s");
+			back_btn.get_style_context().add_class("flat");
+			back_btn.clicked.connect(() => seek_relative(-15));
+			scrub_box.pack_start(back_btn, false, false, 0);
+
+			// Seekbar
+			scrub_scale = new Gtk.Scale.with_range(Gtk.Orientation.HORIZONTAL, 0, 3600, 1);
+			scrub_scale.set_draw_value(false);
+			scrub_scale.value_changed.connect(on_scrub_value_changed);
+			scrub_box.pack_start(scrub_scale, true, true, 0);
+
+			// Forward 15s button
+			var fwd_btn = new Gtk.Button.with_label("►►15s");
+			fwd_btn.get_style_context().add_class("flat");
+			fwd_btn.clicked.connect(() => seek_relative(15));
+			scrub_box.pack_start(fwd_btn, false, false, 0);
+
+			// Live button
+			var live_btn = new Gtk.Button.with_label("Live");
+			live_btn.get_style_context().add_class("suggested-action");
+			live_btn.clicked.connect(seek_to_live);
+			scrub_box.pack_start(live_btn, false, false, 0);
+
+			scrub_overlay.pack_start(scrub_box, false, false, 0);
+
+			// Buffer info label
+			buffer_label = new Gtk.Label("");
+			buffer_label.halign = Gtk.Align.START;
+			buffer_label.get_style_context().add_class("dim-label");
+			var attr_list_buf = new Pango.AttrList();
+			attr_list_buf.insert(Pango.attr_scale_new(0.85));
+			buffer_label.set_attributes(attr_list_buf);
+			scrub_overlay.pack_start(buffer_label, false, false, 0);
+
+			scrub_revealer.add(scrub_overlay);
+			track_container.pack_start(scrub_revealer, false, false, 0);
+
+			// Wrap in EventBox for hover detection
+			track_eventbox = new Gtk.EventBox();
+			track_eventbox.add(track_container);
+
+			// Set events to track pointer motion properly
+			track_eventbox.set_events(Gdk.EventMask.ENTER_NOTIFY_MASK |
+									  Gdk.EventMask.LEAVE_NOTIFY_MASK);
+			track_eventbox.enter_notify_event.connect(on_track_area_enter);
+			track_eventbox.leave_notify_event.connect(on_track_area_leave);
+
+			content_box.pack_start(track_eventbox, false, false, 2);
+
+			// Show all widgets (revealer will control visibility)
+			scrub_overlay.show_all();
 
 			// Codec/bitrate label
 			codec_label = new Gtk.Label("");
@@ -403,6 +477,17 @@ namespace BudgieRadio {
 					on_playback_stopped_signal
 				);
 
+				// Subscribe to PlaybackPaused signal
+				playback_paused_subscription = bus_connection.signal_subscribe(
+					"org.ubuntubudgie.radio",
+					"org.ubuntubudgie.radio.Daemon",
+					"PlaybackPaused",
+					"/org/ubuntubudgie/radio/Daemon",
+					null,
+					GLib.DBusSignalFlags.NONE,
+					on_playback_paused_signal
+				);
+
 			} catch (Error e) {
 				warning("Failed to connect to D-Bus: %s", e.message);
 			}
@@ -497,11 +582,178 @@ namespace BudgieRadio {
 		) {
 			// Update UI for paused state
 			is_paused = true;
-			track_label.set_text("⏸ Paused");
+
+			// Show time behind live
+			try {
+				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
+					"org.ubuntubudgie.radio",
+					"/org/ubuntubudgie/radio/Daemon"
+				);
+				int64 behind = proxy.get_time_behind_live();
+				if (behind > 5) {
+					track_label.set_text(@"⏸ Paused • $(format_time(behind)) behind live");
+				} else {
+					track_label.set_text("⏸ Paused");
+				}
+			} catch (Error e) {
+				track_label.set_text("⏸ Paused");
+			}
+
 			update_visibility();
 		}
 
-		private void update_visibility() {
+		private bool on_track_area_enter(Gdk.EventCrossing event) {
+			// Ignore if already showing or if no playback
+			if (scrub_overlay_visible || (!is_playing && !is_paused)) {
+				return false;
+			}
+
+			// Show scrubber if we're playing OR paused (anytime there's buffer)
+			scrub_overlay_visible = true;
+			scrub_revealer.set_reveal_child(true);
+			update_buffer_info();
+
+			// Start periodic updates while hovering
+			if (scrubber_update_timeout == 0) {
+				scrubber_update_timeout = GLib.Timeout.add(500, update_scrubber_position);
+			}
+			return false;
+		}
+
+		private bool on_track_area_leave(Gdk.EventCrossing event) {
+			// Only hide if actually leaving to outside the widget
+			// Check if we're entering a child widget
+			if (event.detail == Gdk.NotifyType.INFERIOR) {
+				return false;  // Ignore - we're just moving to a child widget
+			}
+
+			// Ignore if already hidden
+			if (!scrub_overlay_visible) {
+				return false;
+			}
+
+			scrub_overlay_visible = false;
+			scrub_revealer.set_reveal_child(false);
+
+			// Stop periodic updates
+			if (scrubber_update_timeout > 0) {
+				GLib.Source.remove(scrubber_update_timeout);
+				scrubber_update_timeout = 0;
+			}
+
+			return false;
+		}
+
+		private bool update_scrubber_position() {
+			// Only update while scrubber is visible
+			if (!scrub_overlay_visible) {
+				return false;  // Stop the timer
+			}
+
+			update_buffer_info();
+			return true;  // Continue updating
+		}
+
+		private string format_time(int64 seconds) {
+			int mins = (int)(seconds / 60);
+			int secs = (int)(seconds % 60);
+			return @"$(mins):$(secs.to_string().printf("%02d"))";
+		}
+
+		private void update_buffer_info() {
+			if (!is_playing && !is_paused) {
+				return;
+			}
+
+			try {
+				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
+					"org.ubuntubudgie.radio",
+					"/org/ubuntubudgie/radio/Daemon"
+				);
+
+				int64 buffer_duration = proxy.get_buffer_duration();
+				int64 current_pos = proxy.get_current_position();
+				int64 behind_live = proxy.get_time_behind_live();
+
+				// Update scale range
+				updating_scrubber = true;  // Block value_changed signal
+				scrub_scale.set_range(0, buffer_duration);
+				scrub_scale.set_value(current_pos);
+				updating_scrubber = false;
+
+				// Show buffer info
+				string status = is_paused ? "Paused" : "Playing";
+				if (behind_live > 5) {
+					// More than 5 seconds behind - show it
+					buffer_label.set_text(
+						@"$status • Buffer: $(format_time(buffer_duration)) • " +
+						@"$(format_time(behind_live)) behind live"
+					);
+				} else {
+					// Essentially live
+					buffer_label.set_text(@"$status • Buffer: $(format_time(buffer_duration)) • LIVE");
+				}
+
+			} catch (Error e) {
+				warning("Failed to get buffer info: %s", e.message);
+			}
+		}
+
+		private void seek_relative(int seconds) {
+			try {
+				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
+					"org.ubuntubudgie.radio",
+					"/org/ubuntubudgie/radio/Daemon"
+				);
+				proxy.seek_relative((int64)seconds);
+
+				// Update UI after a short delay
+				GLib.Timeout.add(100, () => {
+					update_buffer_info();
+					return false;
+				});
+			} catch (Error e) {
+				warning("Failed to seek: %s", e.message);
+			}
+		}
+
+		private void on_scrub_value_changed() {
+			// Ignore programmatic updates
+			if (updating_scrubber) {
+				return;
+			}
+
+			// Seek to absolute position in buffer
+			try {
+				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
+					"org.ubuntubudgie.radio",
+					"/org/ubuntubudgie/radio/Daemon"
+				);
+
+				int64 current_pos = proxy.get_current_position();
+				int64 target_pos = (int64)scrub_scale.get_value();
+				int64 offset = target_pos - current_pos;
+
+				proxy.seek_relative(offset);
+			} catch (Error e) {
+				warning("Failed to scrub: %s", e.message);
+			}
+		}
+
+		private void seek_to_live() {
+			try {
+				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
+					"org.ubuntubudgie.radio",
+					"/org/ubuntubudgie/radio/Daemon"
+				);
+
+				proxy.seek_to_live();
+			} catch (Error e) {
+				warning("Failed to seek to live: %s", e.message);
+			}
+		}
+
+ 		private void update_visibility() {
 			// Update toggle button and pause button based on playback state
 			if (is_playing && !is_paused) {
 				// Playing state
@@ -524,7 +776,7 @@ namespace BudgieRadio {
  				toggle_button.set_image(play_icon);
  				toggle_button.set_tooltip_text("Play last station");
 				pause_button.set_sensitive(false);
-				station_icon.get_style_context().add_class("dim-label");
+ 				station_icon.get_style_context().add_class("dim-label");
 			}
 		}
 
@@ -604,7 +856,7 @@ namespace BudgieRadio {
 
 		private void on_toggle_clicked() {
 			if (is_playing) {
-				// Stop playback
+				// Stop playback (works whether playing or paused)
 				try {
 					var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
 						"org.ubuntubudgie.radio",
@@ -641,11 +893,11 @@ namespace BudgieRadio {
 		}
 
 		private void load_last_station() {
-			// Load last station info from GSettings and display it
-			string name = settings.get_string("last-station-name");
-			string codec = settings.get_string("last-station-codec");
-			int bitrate = settings.get_int("last-station-bitrate");
+			// Note: This just displays info, doesn't auto-play
+ 			string name = settings.get_string("last-station-name");
 			string favicon = settings.get_string("last-station-favicon");
+ 			string codec = settings.get_string("last-station-codec");
+ 			int bitrate = settings.get_int("last-station-bitrate");
 
 			if (name != "") {
 				station_label.set_text(name);
@@ -683,6 +935,12 @@ namespace BudgieRadio {
 					bus_connection.signal_unsubscribe(playback_paused_subscription);
 				}
 			}
+
+			// Clean up timeout
+			if (scrubber_update_timeout > 0) {
+				GLib.Source.remove(scrubber_update_timeout);
+				scrubber_update_timeout = 0;
+			}
 		}
 	}
 }
@@ -698,6 +956,21 @@ interface RadioDaemonProxy : Object {
 
 	[DBus (name = "ResumePlayback")]
 	public abstract void resume_playback() throws Error;
+
+	[DBus (name = "SeekRelative")]
+	public abstract void seek_relative(int64 offset_seconds) throws Error;
+
+	[DBus (name = "GetBufferDuration")]
+	public abstract int64 get_buffer_duration() throws Error;
+
+	[DBus (name = "GetCurrentPosition")]
+	public abstract int64 get_current_position() throws Error;
+
+	[DBus (name = "GetTimeBehindLive")]
+	public abstract int64 get_time_behind_live() throws Error;
+
+	[DBus (name = "SeekToLive")]
+	public abstract void seek_to_live() throws Error;
 
 	[DBus (name = "PlayStation")]
 	public abstract void play_station(string uuid) throws Error;
