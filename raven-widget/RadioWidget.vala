@@ -58,6 +58,7 @@ namespace BudgieRadio {
 		private GLib.Settings settings;
 		private bool updating_scrubber = false;
 		private uint scrubber_update_timeout = 0;
+		private uint paused_update_timeout = 0;
 
 		public RadioWidget(string uuid, GLib.Settings? settings) {
 			initialize(uuid, settings);
@@ -559,6 +560,12 @@ namespace BudgieRadio {
 			// Reset UI
 			is_playing = false;
 			is_paused = false;
+
+			if (paused_update_timeout > 0) {
+				GLib.Source.remove(paused_update_timeout);
+				paused_update_timeout = 0;
+			}
+
 			current_playing_uuid = "";
 			station_label.set_text("No station playing");
 			track_label.set_text("");
@@ -582,24 +589,40 @@ namespace BudgieRadio {
 		) {
 			// Update UI for paused state
 			is_paused = true;
+			// Start a repeating update so "behind live" keeps ticking
+			if (paused_update_timeout == 0) {
+				paused_update_timeout = GLib.Timeout.add(1000, update_paused_label);
+			}
 
-			// Show time behind live
+			update_paused_label();
+			update_visibility();
+		}
+
+		private bool update_paused_label() {
+			// Stop if we've resumed or stopped
+			if (!is_paused) {
+				paused_update_timeout = 0;
+				return false;
+			}
+
 			try {
 				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
 					"org.ubuntubudgie.radio",
 					"/org/ubuntubudgie/radio/Daemon"
 				);
 				int64 behind = proxy.get_time_behind_live();
-				if (behind > 5) {
+				if (behind > 0) {
 					track_label.set_text(@"⏸ Paused • $(format_time(behind)) behind live");
 				} else {
-					track_label.set_text("⏸ Paused");
+					track_label.set_text("⏸ Paused • LIVE");
 				}
 			} catch (Error e) {
 				track_label.set_text("⏸ Paused");
+				paused_update_timeout = 0;
+				return false;
 			}
 
-			update_visibility();
+			return true; // Keep repeating every second
 		}
 
 		private bool on_track_area_enter(Gdk.EventCrossing event) {
@@ -682,18 +705,14 @@ namespace BudgieRadio {
 				updating_scrubber = false;
 
 				// Show buffer info
-				string status = is_paused ? "Paused" : "Playing";
-				if (behind_live > 5) {
-					// More than 5 seconds behind - show it
-					buffer_label.set_text(
-						@"$status • Buffer: $(format_time(buffer_duration)) • " +
-						@"$(format_time(behind_live)) behind live"
-					);
+				string status = is_paused ? "⏸ Paused" : "▶ Playing";
+				string live_status;
+				if (behind_live > 0) {
+					live_status = @"$(format_time(behind_live)) behind live";
 				} else {
-					// Essentially live
-					buffer_label.set_text(@"$status • Buffer: $(format_time(buffer_duration)) • LIVE");
+					live_status = "● LIVE";
 				}
-
+				buffer_label.set_text(@"$status • $live_status • Buffer: $(format_time(buffer_duration))");
 			} catch (Error e) {
 				warning("Failed to get buffer info: %s", e.message);
 			}
@@ -937,6 +956,10 @@ namespace BudgieRadio {
 			}
 
 			// Clean up timeout
+			if (paused_update_timeout > 0) {
+				GLib.Source.remove(paused_update_timeout);
+				paused_update_timeout = 0;
+			}
 			if (scrubber_update_timeout > 0) {
 				GLib.Source.remove(scrubber_update_timeout);
 				scrubber_update_timeout = 0;

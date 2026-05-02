@@ -80,10 +80,12 @@ class RadioDaemon(dbus.service.Object):
         self.record_file = None
         self.record_start_time = 0
         self.max_buffer_duration = 3600  # 1 hour in seconds
-        self.max_buffer_size = 200 * 1024 * 1024  # 200MB for encoded audio
+        self.max_buffer_size =  200 * 1024 * 1024  # 200MB for encoded audio
         self.is_paused = False
         self.is_playing_from_buffer = False
         self.auto_resume_timeout = None
+        self.buffer_switch_time = 0      # wall-clock when we switched to buffer
+        self.buffer_switch_position = 0  # position in buffer file at switch time (seconds)
 
         # GSettings for saving last station
         self.settings = Gio.Settings.new("org.ubuntubudgie.plugins.radio-browser")
@@ -305,6 +307,8 @@ class RadioDaemon(dbus.service.Object):
         self.current_station = None
         self.is_paused = False
         self.is_playing_from_buffer = False
+        self.buffer_switch_time = 0
+        self.buffer_switch_position = 0
 
         # Keep the buffer file - don't delete it
         # It will be overwritten when next station plays
@@ -459,6 +463,10 @@ class RadioDaemon(dbus.service.Object):
 
     def _switch_to_buffer_playback(self):
         """Switch from live stream to playing from buffer file"""
+        # Record the wall-clock time we left live, so we can compute true lag
+        self.buffer_switch_time = GLib.get_monotonic_time() / 1000000
+        self.buffer_switch_position = self._get_buffer_duration_internal()
+
         print(f"\n=== SWITCH TO BUFFER PLAYBACK ===")
 
         if not self.record_file or not os.path.exists(self.record_file):
@@ -577,6 +585,10 @@ class RadioDaemon(dbus.service.Object):
 
     def _switch_to_live_playback(self):
         """Switch from buffer file back to live stream"""
+        # Reset buffer tracking
+        self.buffer_switch_time = 0
+        self.buffer_switch_position = 0
+
         print(f"\n=== SWITCH TO LIVE PLAYBACK ===")
 
         if not self.current_station:
@@ -608,18 +620,10 @@ class RadioDaemon(dbus.service.Object):
         if not self.record_file or not os.path.exists(self.record_file):
             return 0
 
-        # If playing from buffer, query the actual file duration
-        if self.is_playing_from_buffer and self.player:
-            duration = self.player.query_duration(Gst.Format.TIME)
-            if duration[0]:
-                dur_sec = duration[1] // Gst.SECOND
-                # Debug log occasionally
-                import random
-                if random.random() < 0.1:  # 10% of calls
-                    print(f"[DEBUG] GetBufferDuration (from file): {dur_sec}s")
-                return dur_sec
-
-        # Otherwise calculate based on recording time
+        # Always base buffer duration on how long the recorder has been running.
+        # The recorder pipeline keeps writing to disk regardless of whether the
+        # player is live, playing from buffer, or paused - so this is always the
+        # correct measure of how much audio is available.
         current_time = GLib.get_monotonic_time() / 1000000
         elapsed = current_time - self.record_start_time
 
@@ -650,10 +654,25 @@ class RadioDaemon(dbus.service.Object):
 
     @dbus.service.method(INTERFACE, out_signature='x')
     def GetTimeBehindLive(self):
-        """Return how many seconds behind live we are"""
-        buffer_duration = self._get_buffer_duration_internal()
+        """
+        Return how many seconds behind the real live stream we are.
+        Zero means we are on the live stream directly.
+        Only non-zero when playing from the buffer.
+        """
+        if not self.is_playing_from_buffer:
+            return 0
+
+        # Time elapsed in the real world since we left live
+        now = GLib.get_monotonic_time() / 1000000
+        real_world_elapsed = now - self.buffer_switch_time
+
+        # Our position in the buffer file
         current_pos = self.GetCurrentPosition()
-        return buffer_duration - current_pos
+
+        # True lag = how far the live stream has moved on while we've been
+        # playing (or paused) in the buffer
+        behind = int(self.buffer_switch_position + real_world_elapsed - current_pos)
+        return max(0, behind)
 
     @dbus.service.method(INTERFACE, out_signature='b')
     def IsPaused(self):
