@@ -12,6 +12,8 @@ Copyright 2026 Ubuntu Budgie Developers
 import asyncio
 import sys
 import threading
+import gettext
+import locale
 import gi
 
 gi.require_version('Gtk', '3.0')
@@ -27,6 +29,12 @@ except ImportError:
     HAS_RADIOS = False
     print("ERROR: 'radios' library required. Install with:")
     print("  sudo apt install python3-radios")
+
+# Setup translations
+locale.setlocale(locale.LC_ALL, '')
+gettext.bindtextdomain('budgie-radio-widget', '/usr/share/locale')
+gettext.textdomain('budgie-radio-widget')
+_ = gettext.gettext
 
 
 class StationRow(Gtk.ListBoxRow):
@@ -48,14 +56,16 @@ class StationRow(Gtk.ListBoxRow):
         name_label.set_markup(f"<b>{GLib.markup_escape_text(station.name)}</b>")
         name_label.set_ellipsize(3)  # PANGO_ELLIPSIZE_END
 
-        # Info label
+        # Info label - build info parts
         info_parts = []
         if station.country:
             info_parts.append(station.country)
         if station.codec:
             info_parts.append(f"{station.codec}")
         if station.bitrate:
-            info_parts.append(f"{station.bitrate}kbps")
+            # TRANSLATORS: kbps = kilobits per second, audio quality measure
+            # Keep short, shown after codec like "MP3 192 kbps"
+            info_parts.append(_("{bitrate}kbps").format(bitrate=station.bitrate))
 
         info_label = Gtk.Label(xalign=0)
         info_label.set_text(" | ".join(info_parts))
@@ -73,7 +83,8 @@ class StationRow(Gtk.ListBoxRow):
             "media-playback-start",
             Gtk.IconSize.BUTTON
         )
-        play_btn.set_tooltip_text("Play this station")
+        # TRANSLATORS: Tooltip for play button next to each station in the list
+        play_btn.set_tooltip_text(_("Play this station"))
         play_btn.connect("clicked", self.on_play_clicked)
         hbox.pack_end(play_btn, False, False, 0)
 
@@ -90,7 +101,8 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
     """Main browser window"""
 
     def __init__(self, app):
-        super().__init__(application=app, title="Radio Browser")
+        # TRANSLATORS: Main window title for the radio station browser application
+        super().__init__(application=app, title=_("Radio Browser"))
         self.set_default_size(900, 600)
         self.set_border_width(0)
 
@@ -152,15 +164,18 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
         # Header bar
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)
-        header.set_title("Radio Browser")
-        header.set_subtitle("Browse internet radio stations")
+        # TRANSLATORS: Main window title
+        header.set_title(_("Radio Browser"))
+        # TRANSLATORS: Window subtitle describing the application purpose
+        header.set_subtitle(_("Browse internet radio stations"))
 
         # Pause button in header
         pause_button = Gtk.Button.new_from_icon_name(
             "media-playback-pause",
             Gtk.IconSize.BUTTON
         )
-        pause_button.set_tooltip_text("Pause playback")
+        # TRANSLATORS: Tooltip for pause button in window header
+        pause_button.set_tooltip_text(_("Pause playback"))
         pause_button.connect("clicked", self.on_pause_clicked)
         self.pause_button = pause_button  # Store reference
         header.pack_end(pause_button)
@@ -170,7 +185,8 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
             "media-playback-stop",
             Gtk.IconSize.BUTTON
         )
-        stop_button.set_tooltip_text("Stop playback")
+        # TRANSLATORS: Tooltip for stop button in window header
+        stop_button.set_tooltip_text(_("Stop playback"))
         stop_button.connect("clicked", self.on_stop_clicked)
         header.pack_end(stop_button)
 
@@ -187,7 +203,8 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
         search_box.set_margin_bottom(5)
 
         self.search_entry = Gtk.SearchEntry()
-        self.search_entry.set_placeholder_text("Search stations...")
+        # TRANSLATORS: Placeholder text in search box, prompts user to type station name
+        self.search_entry.set_placeholder_text(_("Search stations..."))
         self.search_entry.connect("search-changed", self.on_search_changed)
         search_box.pack_start(self.search_entry, True, True, 0)
 
@@ -200,9 +217,12 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
         filter_box.set_margin_bottom(10)
 
         filters = [
-            ("Top Voted", Order.VOTES),
-            ("Most Popular", Order.CLICK_COUNT),
-            ("Recently Changed", Order.CHANGE_TIMESTAMP),
+            # TRANSLATORS: Filter button - shows stations with most user votes
+            (_("Top Voted"), Order.VOTES),
+            # TRANSLATORS: Filter button - shows stations with most listeners/clicks
+            (_("Most Popular"), Order.CLICK_COUNT),
+            # TRANSLATORS: Filter button - shows stations recently updated in database
+            (_("Recently Changed"), Order.CHANGE_TIMESTAMP),
         ]
 
         for label, order in filters:
@@ -230,7 +250,8 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
         self.status_label.set_margin_top(5)
         self.status_label.set_margin_bottom(5)
         self.status_label.get_style_context().add_class("dim-label")
-        self.status_label.set_text("Loading...")
+        # TRANSLATORS: Initial status message shown while application loads
+        self.status_label.set_text(_("Loading..."))
         vbox.pack_end(self.status_label, False, False, 0)
 
         self.add(vbox)
@@ -238,7 +259,8 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
 
     async def load_stations(self, order=Order.VOTES, filter_by=None, filter_term=None):
         """Load stations from API (runs in async thread)"""
-        GLib.idle_add(self.status_label.set_text, "Loading stations...")
+        # TRANSLATORS: Status message shown while fetching station list from internet
+        GLib.idle_add(self.status_label.set_text, _("Loading stations..."))
 
         try:
             kwargs = {
@@ -257,10 +279,10 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
             GLib.idle_add(self.populate_stations, stations)
 
         except Exception as e:
-            GLib.idle_add(
-                self.status_label.set_text,
-                f"Error loading stations: {e}"
-            )
+            # TRANSLATORS: Error message when station list fails to load
+            # {error} is the technical error message
+            error_msg = _("Error loading stations: {error}").format(error=str(e))
+            GLib.idle_add(self.status_label.set_text, error_msg)
 
     def populate_stations(self, stations):
         """Populate the station list (called on main thread)"""
@@ -276,7 +298,10 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
             play_btn.connect("clicked", self.on_play_station, station)
             self.station_listbox.add(row)
 
-        self.status_label.set_text(f"Showing {len(stations)} stations")
+        # TRANSLATORS: Status message showing number of stations in list
+        # {count} is the number of stations found/displayed
+        status_msg = _("Showing {count} stations").format(count=len(stations))
+        self.status_label.set_text(status_msg)
         self.station_listbox.show_all()
 
     def on_station_activated(self, listbox, row):
@@ -301,11 +326,15 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
                 dbus_interface='org.ubuntubudgie.radio.Daemon'
             )
 
-            self.status_label.set_text(f"Now playing: {station.name}")
+            # TRANSLATORS: Status message when station starts playing
+            # {station} is the name of the radio station
+            status_msg = _("Now playing: {station}").format(station=station.name)
+            self.status_label.set_text(status_msg)
 
         except dbus.exceptions.DBusException as e:
             print(f"Failed to play station: {e}")
-            self.status_label.set_text(f"Error: Failed to play station")
+            # TRANSLATORS: Error message when playback fails to start
+            self.status_label.set_text(_("Error: Failed to play station"))
 
     def on_search_changed(self, entry):
         """Handle search input"""
@@ -349,15 +378,18 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
                     dbus_interface='org.ubuntubudgie.radio.Daemon'
                 )
                 self.is_paused = False
-                self.pause_button.set_tooltip_text("Pause playback")
+                # TRANSLATORS: Tooltip for pause button when playback can be paused
+                self.pause_button.set_tooltip_text(_("Pause playback"))
             else:
                 # Pause
                 self.daemon_proxy.PausePlayback(
                     dbus_interface='org.ubuntubudgie.radio.Daemon'
                 )
                 self.is_paused = True
-                self.pause_button.set_tooltip_text("Resume playback")
-                self.status_label.set_text("Playback paused")
+                # TRANSLATORS: Tooltip for pause button when playback is paused (to resume)
+                self.pause_button.set_tooltip_text(_("Resume playback"))
+                # TRANSLATORS: Status message when playback is paused
+                self.status_label.set_text(_("Playback paused"))
         except dbus.exceptions.DBusException as e:
             print(f"Failed to pause/resume: {e}")
 
@@ -371,7 +403,8 @@ class RadioBrowserWindow(Gtk.ApplicationWindow):
             self.daemon_proxy.StopPlayback(
                 dbus_interface='org.ubuntubudgie.radio.Daemon'
             )
-            self.status_label.set_text("Playback stopped")
+            # TRANSLATORS: Status message when playback is stopped
+            self.status_label.set_text(_("Playback stopped"))
             self.is_paused = False
         except dbus.exceptions.DBusException as e:
             print(f"Failed to stop playback: {e}")

@@ -2,8 +2,10 @@
 # Vala compiler arguments
 vala_args = [
     '--target-glib=2.56',
+    '--define=GETTEXT_PACKAGE="budgie-radio-widget"',
 ]
 
+# C compiler arguments
 # Vala generates bad C code and missing these on gcc 14 will cause FTBFS
 # Additionally, Meson 1.4 unhides warnings from valac-generated C code,
 # which causes unreadable logspam. Reenables prior behavior.
@@ -11,6 +13,7 @@ am_cflags = [
     '-w',
     '-Wno-incompatible-pointer-types',
     '-Wno-implicit-function-declaration',
+    '-DGETTEXT_PACKAGE="budgie-radio-widget"',
 ]
 add_global_arguments(am_cflags, language: 'c')
 

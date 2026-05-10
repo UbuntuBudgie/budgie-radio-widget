@@ -7,7 +7,7 @@ install_data(
 )
 
 # Install desktop file
-install_data(
-    'budgie-radio-browser.desktop',
-    install_dir: join_paths(get_option('datadir'), 'applications')
-)
+#install_data(
+#    'budgie-radio-browser.desktop',
+#    install_dir: join_paths(get_option('datadir'), 'applications')
+#)

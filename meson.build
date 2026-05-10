@@ -46,6 +46,7 @@ subdir('schema')
 subdir('daemon')
 subdir('gui-app')
 subdir('raven-widget')
+subdir('po')  # Add translation support
 
 # Summary
 message('Configuration:')
@@ -60,4 +61,7 @@ message('  2. Enable widget in Budgie Settings → Raven')
 message('  3. Run daemon: radio-daemon')
 message('  4. Or launch browser: budgie-radio-browser')
 message('')
-
+message('Translation:')
+message('  Update POT: ./po/update-pot.sh')
+message('  Pull translations: ./po/tx-pull.sh')
+message('')

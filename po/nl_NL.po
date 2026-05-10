@@ -1,0 +1,317 @@
+# SOME DESCRIPTIVE TITLE.
+# Copyright (C) YEAR THE PACKAGE'S COPYRIGHT HOLDER
+# This file is distributed under the same license as the PACKAGE package.
+# FIRST AUTHOR <EMAIL@ADDRESS>, YEAR.
+# 
+# Translators:
+# Stephan Paternotte <stephan@paternottes.net>, 2026
+# 
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2026-05-10 14:05+0100\n"
+"PO-Revision-Date: 2026-05-10 13:15+0000\n"
+"Last-Translator: Stephan Paternotte <stephan@paternottes.net>, 2026\n"
+"Language-Team: Dutch (Netherlands) (https://app.transifex.com/ubuntu-budgie/teams/72251/nl_NL/)\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Language: nl_NL\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#: daemon/radio-daemon.py:43 daemon/radio-daemon.py:816
+msgid "Unknown Station"
+msgstr "Onbekend station"
+
+#: daemon/radio-daemon.py:44 daemon/radio-daemon.py:819
+#: raven-widget/RadioWidget.vala:376
+msgid "Unknown"
+msgstr "Onbekend"
+
+#. TRANSLATORS: kbps = kilobits per second, audio quality measure
+#. Keep short, shown after codec like "MP3 192 kbps"
+#: gui-app/budgie-radio-browser.py:68
+#, python-brace-format
+msgid "{bitrate}kbps"
+msgstr "{bitrate}kbps"
+
+#. TRANSLATORS: Tooltip for play button next to each station in the list
+#: gui-app/budgie-radio-browser.py:87
+msgid "Play this station"
+msgstr "Dit station afspelen"
+
+#. TRANSLATORS: Main window title for the radio station browser application
+#. TRANSLATORS: Main window title
+#: gui-app/budgie-radio-browser.py:105 gui-app/budgie-radio-browser.py:168
+#: po/budgie-radio-widget.desktop:3
+msgid "Radio Browser"
+msgstr "Radio-browser"
+
+#. TRANSLATORS: Window subtitle describing the application purpose
+#: gui-app/budgie-radio-browser.py:170
+msgid "Browse internet radio stations"
+msgstr "Internetradiostations bladeren"
+
+#. TRANSLATORS: Tooltip for pause button in window header
+#. TRANSLATORS: Tooltip for pause button when playback can be paused
+#. TRANSLATORS: Tooltip for pause button in Raven panel header
+#. TRANSLATORS: Tooltip for pause button when able to pause
+#: gui-app/budgie-radio-browser.py:178 gui-app/budgie-radio-browser.py:382
+#: raven-widget/RadioWidget.vala:125 raven-widget/RadioWidget.vala:832
+msgid "Pause playback"
+msgstr "Afspelen pauzeren"
+
+#. TRANSLATORS: Tooltip for stop button in window header
+#. TRANSLATORS: Tooltip for stop button when music is playing
+#. TRANSLATORS: Tooltip for stop button when paused
+#: gui-app/budgie-radio-browser.py:189 raven-widget/RadioWidget.vala:829
+#: raven-widget/RadioWidget.vala:839
+msgid "Stop playback"
+msgstr "Afspelen stoppen"
+
+#. TRANSLATORS: Placeholder text in search box, prompts user to type station
+#. name
+#: gui-app/budgie-radio-browser.py:207
+msgid "Search stations..."
+msgstr "Stations zoeken…"
+
+#. TRANSLATORS: Filter button - shows stations with most user votes
+#: gui-app/budgie-radio-browser.py:221
+msgid "Top Voted"
+msgstr "Meest gestemd"
+
+#. TRANSLATORS: Filter button - shows stations with most listeners/clicks
+#: gui-app/budgie-radio-browser.py:223
+msgid "Most Popular"
+msgstr "Meest populair"
+
+#. TRANSLATORS: Filter button - shows stations recently updated in database
+#: gui-app/budgie-radio-browser.py:225
+msgid "Recently Changed"
+msgstr "Onlangs gewijzigd"
+
+#. TRANSLATORS: Initial status message shown while application loads
+#: gui-app/budgie-radio-browser.py:254
+msgid "Loading..."
+msgstr "Laden…"
+
+#. TRANSLATORS: Status message shown while fetching station list from internet
+#: gui-app/budgie-radio-browser.py:263
+msgid "Loading stations..."
+msgstr "Stations laden…"
+
+#. TRANSLATORS: Error message when station list fails to load
+#. {error} is the technical error message
+#: gui-app/budgie-radio-browser.py:284
+#, python-brace-format
+msgid "Error loading stations: {error}"
+msgstr "Fout bij het laden van stations: {error}"
+
+#. TRANSLATORS: Status message showing number of stations in list
+#. {count} is the number of stations found/displayed
+#: gui-app/budgie-radio-browser.py:303
+#, python-brace-format
+msgid "Showing {count} stations"
+msgstr "{count} stations weergeven"
+
+#. TRANSLATORS: Status message when station starts playing
+#. {station} is the name of the radio station
+#: gui-app/budgie-radio-browser.py:331
+#, python-brace-format
+msgid "Now playing: {station}"
+msgstr "Speelt nu: {station}"
+
+#. TRANSLATORS: Error message when playback fails to start
+#: gui-app/budgie-radio-browser.py:337
+msgid "Error: Failed to play station"
+msgstr "Fout: Afspelen van station is mislukt"
+
+#. TRANSLATORS: Tooltip for pause button when playback is paused (to resume)
+#. TRANSLATORS: Tooltip for resume button when paused
+#: gui-app/budgie-radio-browser.py:390 raven-widget/RadioWidget.vala:842
+msgid "Resume playback"
+msgstr "Afspelen hervatten"
+
+#. TRANSLATORS: Status message when playback is paused
+#: gui-app/budgie-radio-browser.py:392
+msgid "Playback paused"
+msgstr "Afspelen gepauzeerd"
+
+#. TRANSLATORS: Status message when playback is stopped
+#: gui-app/budgie-radio-browser.py:407
+msgid "Playback stopped"
+msgstr "Afspelen gestopt"
+
+#. TRANSLATORS: Tooltip for radio icon in Raven panel header
+#: raven-widget/RadioWidget.vala:101
+msgid "Internet Radio Player"
+msgstr "Internetradiospeler"
+
+#. TRANSLATORS: Widget title shown in Raven panel header
+#: raven-widget/RadioWidget.vala:109
+msgid "Radio Player"
+msgstr "Radiospeler"
+
+#. TRANSLATORS: Tooltip for play button - plays the last listened station
+#. TRANSLATORS: Tooltip for play button when nothing playing
+#: raven-widget/RadioWidget.vala:143 raven-widget/RadioWidget.vala:849
+msgid "Play last station"
+msgstr "Laatste station afspelen"
+
+#. TRANSLATORS: Default text when no radio station is playing
+#. TRANSLATORS: Status shown when no radio station is playing
+#: raven-widget/RadioWidget.vala:160 raven-widget/RadioWidget.vala:596
+msgid "No station playing"
+msgstr "Geen station speelt"
+
+#. TRANSLATORS: Tooltip for + button to save station as preset
+#. TRANSLATORS: Tooltip for + button when station can be saved
+#: raven-widget/RadioWidget.vala:171 raven-widget/RadioWidget.vala:564
+msgid "Add to presets"
+msgstr "Toevoegen aan voorinstellingen"
+
+#. TRANSLATORS: Menu item to save current station as preset number {n}
+#. Presets are like car radio preset buttons (numbered 1-5)
+#: raven-widget/RadioWidget.vala:184
+#, c-format
+msgid "Set as Preset %d"
+msgstr "Opslaan als voorinstelling %d"
+
+#. TRANSLATORS: Button label to rewind 15 seconds in radio buffer
+#. ◄◄ are unicode arrow symbols, keep them or use local equivalent
+#: raven-widget/RadioWidget.vala:227
+msgid "◄◄15s"
+msgstr "◄◄15s"
+
+#. TRANSLATORS: Button label to skip forward 15 seconds in radio buffer
+#. ►► are unicode arrow symbols, keep them or use local equivalent
+#: raven-widget/RadioWidget.vala:241
+msgid "►►15s"
+msgstr "►►15s"
+
+#. TRANSLATORS: Button to jump to live broadcast (leave buffered audio behind)
+#. Keep very short - single word if possible
+#: raven-widget/RadioWidget.vala:249
+msgid "Live"
+msgstr "Live"
+
+#. TRANSLATORS: Section header for preset station buttons (like car radio
+#. presets)
+#. Keep short - single word preferred
+#: raven-widget/RadioWidget.vala:295
+msgid "Presets"
+msgstr "Voorinstellingen"
+
+#. TRANSLATORS: Button to open full station browser window
+#: raven-widget/RadioWidget.vala:324
+msgid "Browse Stations"
+msgstr "Stations bladeren"
+
+#. TRANSLATORS: Tooltip for empty preset button - instructs user how to assign
+#. station
+#: raven-widget/RadioWidget.vala:338
+msgid "Click + button to assign"
+msgstr "Klik op + knop om toe te wijzen"
+
+#. TRANSLATORS: Technical info in preset tooltip
+#. {codec} is audio format (MP3, AAC, etc), {bitrate} is quality in kbps
+#: raven-widget/RadioWidget.vala:390
+#, c-format
+msgid "%s @ %d kbps"
+msgstr "%s @ %d kbps"
+
+#. TRANSLATORS: Tooltip when preset station is no longer available
+#: raven-widget/RadioWidget.vala:403
+msgid "Station unavailable"
+msgstr "Station niet beschikbaar"
+
+#. TRANSLATORS: Tooltip when error loading preset station info
+#: raven-widget/RadioWidget.vala:421
+msgid "Error loading station"
+msgstr "Fout bij laden van station"
+
+#. TRANSLATORS: Technical info line below station name
+#. {codec} is audio format (MP3, AAC, OGG), {bitrate} is quality number in
+#. kbps
+#. TRANSLATORS: Technical info for last played station
+#. {codec} is audio format, {bitrate} is quality in kbps
+#: raven-widget/RadioWidget.vala:540 raven-widget/RadioWidget.vala:978
+#, c-format
+msgid "%s %d kbps"
+msgstr "%s %d kbps"
+
+#. TRANSLATORS: Tooltip for + button when station cannot be saved (no UUID)
+#. TRANSLATORS: Tooltip explaining why + button is disabled
+#: raven-widget/RadioWidget.vala:567 raven-widget/RadioWidget.vala:988
+msgid "Play from browser to add to presets"
+msgstr "Afspelen vanuit browser om toe te voegen aan voorinstellingen"
+
+#. TRANSLATORS: Status when paused and behind live stream
+#. {time} is formatted as MM:SS showing lag behind live broadcast
+#. ⏸ is pause symbol - keep or replace with text like "Paused"
+#: raven-widget/RadioWidget.vala:644
+#, c-format
+msgid "⏸ Paused • %s behind live"
+msgstr "⏸ Gepauzeerd • %s achter op live"
+
+#. TRANSLATORS: Status when paused but at live edge of stream
+#. ⏸ is pause symbol - keep or replace with text
+#. LIVE indicates at the live broadcast point
+#: raven-widget/RadioWidget.vala:649
+msgid "⏸ Paused • LIVE"
+msgstr "⏸ Gepauzeerd • LIVE"
+
+#. TRANSLATORS: Simple paused status when time info unavailable
+#. ⏸ is pause symbol
+#. TRANSLATORS: Playback status indicator - ▶ is play symbol
+#: raven-widget/RadioWidget.vala:654 raven-widget/RadioWidget.vala:745
+msgid "⏸ Paused"
+msgstr "⏸ Gepauzeerd"
+
+#. TRANSLATORS: Time format - {0} is minutes, {1} is seconds (2 digits with
+#. leading zero)
+#. Example: "5:03" means 5 minutes 3 seconds
+#: raven-widget/RadioWidget.vala:719
+#, c-format
+msgid "%d:%02d"
+msgstr "%d:%02d"
+
+#: raven-widget/RadioWidget.vala:745
+msgid "▶ Playing"
+msgstr "▶ Speelt"
+
+#. TRANSLATORS: Shows time delay from live broadcast
+#. {time} is formatted as MM:SS
+#: raven-widget/RadioWidget.vala:750
+#, c-format
+msgid "%s behind live"
+msgstr "%s achter op live"
+
+#. TRANSLATORS: Indicator that playback is at live broadcast point
+#. ● is a bullet point/dot symbol to indicate "live" status
+#: raven-widget/RadioWidget.vala:754
+msgid "● LIVE"
+msgstr "● LIVE"
+
+#. TRANSLATORS: Buffer status line format
+#. {status} is "Playing" or "Paused", {live} is live lag time, {buffer} is
+#. total buffer size
+#. Example: "▶ Playing • 2:30 behind live • Buffer: 15:00"
+#: raven-widget/RadioWidget.vala:759
+#, c-format
+msgid "%s • %s • Buffer: %s"
+msgstr "%s • %s • Buffer: %s"
+
+#: po/budgie-radio-widget.desktop:4
+msgid "Internet Radio Browser"
+msgstr "Internetradio-browser"
+
+#: po/budgie-radio-widget.desktop:5
+msgid "Browse and play internet radio stations"
+msgstr "Bladeren en afspelen van internetradiostations"
+
+#: po/budgie-radio-widget.desktop:10
+msgid "radio;internet;streaming;music;"
+msgstr "radio;internet;streaming;music;muziek;"

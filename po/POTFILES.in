@@ -1,0 +1,5 @@
+# List of source files which contain translatable strings
+daemon/radio-daemon.py
+gui-app/budgie-radio-browser.py
+raven-widget/RadioWidget.vala
+[type: gettext/ini]po/budgie-radio-widget.desktop

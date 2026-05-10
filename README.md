@@ -4,6 +4,12 @@ Internet radio player for Budgie Desktop with Raven integration.
 
 ![](./screenshots/radio.png)
 
+## Translations
+
+Translations are managed on transifex 
+
+https://explore.transifex.com/ubuntu-budgie/budgie-radio-browser/
+
 ## Architecture
 
 The project consists of three components:

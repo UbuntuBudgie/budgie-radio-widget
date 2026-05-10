@@ -97,14 +97,16 @@ namespace BudgieRadio {
 
 			// Icon
 			station_icon = new Gtk.Image.from_icon_name("audio-x-generic", Gtk.IconSize.MENU);
-			station_icon.set_tooltip_text("Internet Radio Player");
+			// TRANSLATORS: Tooltip for radio icon in Raven panel header
+			station_icon.set_tooltip_text(_("Internet Radio Player"));
 			station_icon.margin = 4;
 			station_icon.margin_start = 12;
 			station_icon.margin_end = 10;
 			header_box.add(station_icon);
 
 			// Title label
-			var title_label = new Gtk.Label("Radio Player");
+			// TRANSLATORS: Widget title shown in Raven panel header
+			var title_label = new Gtk.Label(_("Radio Player"));
 			header_box.add(title_label);
 
 			// Pause button
@@ -119,7 +121,8 @@ namespace BudgieRadio {
 
 			pause_button = new Gtk.Button();
 			pause_button.set_image(pause_icon);
-			pause_button.set_tooltip_text("Pause playback");
+			// TRANSLATORS: Tooltip for pause button in Raven panel header
+			pause_button.set_tooltip_text(_("Pause playback"));
 			pause_button.get_style_context().add_class("flat");
 			pause_button.get_style_context().add_class("expander-button");
 			pause_button.margin = 4;
@@ -136,7 +139,8 @@ namespace BudgieRadio {
 
 			toggle_button = new Gtk.Button();
 			toggle_button.set_image(play_icon);
-			toggle_button.set_tooltip_text("Play last station");
+			// TRANSLATORS: Tooltip for play button - plays the last listened station
+			toggle_button.set_tooltip_text(_("Play last station"));
 			toggle_button.get_style_context().add_class("flat");
 			toggle_button.get_style_context().add_class("expander-button");
 			toggle_button.margin = 4;
@@ -152,7 +156,8 @@ namespace BudgieRadio {
 			// Station name label with menu button for favorites
 			var station_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 5);
 
-			station_label = new Gtk.Label("No station playing");
+			// TRANSLATORS: Default text when no radio station is playing
+			station_label = new Gtk.Label(_("No station playing"));
 			station_label.get_style_context().add_class("h3");
 			station_label.halign = Gtk.Align.START;
 			station_label.wrap = true;
@@ -162,7 +167,8 @@ namespace BudgieRadio {
 			// Menu button for adding to favorites
 			var menu_button = new Gtk.MenuButton();
 			menu_button.set_image(new Gtk.Image.from_icon_name("list-add-symbolic", Gtk.IconSize.BUTTON));
-			menu_button.set_tooltip_text("Add to presets");
+			// TRANSLATORS: Tooltip for + button to save station as preset
+			menu_button.set_tooltip_text(_("Add to presets"));
 			menu_button.get_style_context().add_class("flat");
 			menu_button.valign = Gtk.Align.CENTER;
 			menu_button.set_sensitive(false);  // Disabled until playing
@@ -173,7 +179,9 @@ namespace BudgieRadio {
 
 			for (int i = 1; i <= 5; i++) {
 				var button = new Gtk.ModelButton();
-				button.text = @"Set as Preset $i";
+				// TRANSLATORS: Menu item to save current station as preset number {n}
+				// Presets are like car radio preset buttons (numbered 1-5)
+				button.text = _("Set as Preset %d").printf(i);
 				int preset = i;  // Capture for closure
 				button.clicked.connect(() => {
 					set_current_as_favorite(preset);
@@ -214,7 +222,9 @@ namespace BudgieRadio {
 			var scrub_box = new Gtk.Box(Gtk.Orientation.HORIZONTAL, 5);
 
 			// Back 15s button
-			var back_btn = new Gtk.Button.with_label("◄◄15s");
+			// TRANSLATORS: Button label to rewind 15 seconds in radio buffer
+			// ◄◄ are unicode arrow symbols, keep them or use local equivalent
+			var back_btn = new Gtk.Button.with_label(_("◄◄15s"));
 			back_btn.get_style_context().add_class("flat");
 			back_btn.clicked.connect(() => seek_relative(-15));
 			scrub_box.pack_start(back_btn, false, false, 0);
@@ -226,13 +236,17 @@ namespace BudgieRadio {
 			scrub_box.pack_start(scrub_scale, true, true, 0);
 
 			// Forward 15s button
-			var fwd_btn = new Gtk.Button.with_label("►►15s");
+			// TRANSLATORS: Button label to skip forward 15 seconds in radio buffer
+			// ►► are unicode arrow symbols, keep them or use local equivalent
+			var fwd_btn = new Gtk.Button.with_label(_("►►15s"));
 			fwd_btn.get_style_context().add_class("flat");
 			fwd_btn.clicked.connect(() => seek_relative(15));
 			scrub_box.pack_start(fwd_btn, false, false, 0);
 
 			// Live button
-			var live_btn = new Gtk.Button.with_label("Live");
+			// TRANSLATORS: Button to jump to live broadcast (leave buffered audio behind)
+			// Keep very short - single word if possible
+			var live_btn = new Gtk.Button.with_label(_("Live"));
 			live_btn.get_style_context().add_class("suggested-action");
 			live_btn.clicked.connect(seek_to_live);
 			scrub_box.pack_start(live_btn, false, false, 0);
@@ -276,7 +290,9 @@ namespace BudgieRadio {
 			content_box.pack_start(codec_label, false, false, 2);
 
 			// Favorites section
-			var favorites_label = new Gtk.Label("Presets");
+			// TRANSLATORS: Section header for preset station buttons (like car radio presets)
+			// Keep short - single word preferred
+			var favorites_label = new Gtk.Label(_("Presets"));
 			favorites_label.halign = Gtk.Align.START;
 			favorites_label.get_style_context().add_class("dim-label");
 			var attr_list_fav = new Pango.AttrList();
@@ -304,7 +320,8 @@ namespace BudgieRadio {
 			content_box.pack_start(separator, false, false, 5);
 
 			// Browse button
-			browse_button = new Gtk.Button.with_label("Browse Stations");
+			// TRANSLATORS: Button to open full station browser window
+			browse_button = new Gtk.Button.with_label(_("Browse Stations"));
 			browse_button.get_style_context().add_class("suggested-action");
 			browse_button.clicked.connect(on_browse_clicked);
 			content_box.pack_start(browse_button, false, false, 5);
@@ -317,7 +334,8 @@ namespace BudgieRadio {
 
 			// We'll load the preset info after D-Bus is connected
 			// For now, just set it as empty
-			button.set_tooltip_text("Click + button to assign");  // Fix 1 included here
+			// TRANSLATORS: Tooltip for empty preset button - instructs user how to assign station
+			button.set_tooltip_text(_("Click + button to assign"));
 			button.get_style_context().add_class("dim-label");
 			button.set_sensitive(false);
 
@@ -355,7 +373,7 @@ namespace BudgieRadio {
 				var info = proxy.get_station_info(uuid);
 
 				if (info.length > 0) {
-					string name = info.contains("name") ? info["name"].get_string() : "Unknown";
+					string name = info.contains("name") ? info["name"].get_string() : _("Unknown");
 					string country = info.contains("country") ? info["country"].get_string() : "";
 					string codec = info.contains("codec") ? info["codec"].get_string() : "";
 					int bitrate = info.contains("bitrate") ? (int)info["bitrate"].get_int32() : 0;
@@ -367,7 +385,9 @@ namespace BudgieRadio {
 						tooltip_parts.append(@"\n$country");
 					}
 					if (codec != "" && bitrate > 0) {
-						tooltip_parts.append(@"\n$codec @ $bitrate kbps");
+						// TRANSLATORS: Technical info in preset tooltip
+						// {codec} is audio format (MP3, AAC, etc), {bitrate} is quality in kbps
+						tooltip_parts.append(@"\n" + _("%s @ %d kbps").printf(codec, bitrate));
 					}
 
 					button.set_tooltip_markup(tooltip_parts.str);
@@ -379,8 +399,8 @@ namespace BudgieRadio {
 						button.get_style_context().add_class("suggested-action");
 					}
 				} else {
-					// Station info not available
-					button.set_tooltip_text("Station unavailable");
+					// TRANSLATORS: Tooltip when preset station is no longer available
+					button.set_tooltip_text(_("Station unavailable"));
 					button.set_sensitive(false);
 				}
 
@@ -397,7 +417,8 @@ namespace BudgieRadio {
 
 			} catch (Error e) {
 				warning("Failed to load preset info: %s", e.message);
-				button.set_tooltip_text("Error loading station");
+				// TRANSLATORS: Tooltip when error loading preset station info
+				button.set_tooltip_text(_("Error loading station"));
 				button.set_sensitive(false);
 			}
 		}
@@ -514,7 +535,9 @@ namespace BudgieRadio {
 			is_paused = false;
 			station_label.set_text(station_name);
 			track_label.set_text(track_info);
-			codec_label.set_text(@"$codec $bitrate kbps");
+			// TRANSLATORS: Technical info line below station name
+			// {codec} is audio format (MP3, AAC, OGG), {bitrate} is quality number in kbps
+			codec_label.set_text(_("%s %d kbps").printf(codec, bitrate));
 
 			update_visibility();
 			update_preset_highlights();
@@ -537,9 +560,11 @@ namespace BudgieRadio {
 				favorites_menu_button.set_sensitive(has_valid_uuid);
 
 				if (has_valid_uuid) {
-					favorites_menu_button.set_tooltip_text("Add to presets");
+					// TRANSLATORS: Tooltip for + button when station can be saved
+					favorites_menu_button.set_tooltip_text(_("Add to presets"));
 				} else {
-					favorites_menu_button.set_tooltip_text("Play from browser to add to presets");
+					// TRANSLATORS: Tooltip for + button when station cannot be saved (no UUID)
+					favorites_menu_button.set_tooltip_text(_("Play from browser to add to presets"));
 				}
 
 				print(@"UUID: '$uuid', menu enabled: $has_valid_uuid\n");  // Debug
@@ -567,7 +592,8 @@ namespace BudgieRadio {
 			}
 
 			current_playing_uuid = "";
-			station_label.set_text("No station playing");
+			// TRANSLATORS: Status shown when no radio station is playing
+			station_label.set_text(_("No station playing"));
 			track_label.set_text("");
 			codec_label.set_text("");
 			station_icon.set_from_icon_name("audio-x-generic", Gtk.IconSize.MENU);
@@ -612,12 +638,20 @@ namespace BudgieRadio {
 				);
 				int64 behind = proxy.get_time_behind_live();
 				if (behind > 0) {
-					track_label.set_text(@"⏸ Paused • $(format_time(behind)) behind live");
+					// TRANSLATORS: Status when paused and behind live stream
+					// {time} is formatted as MM:SS showing lag behind live broadcast
+					// ⏸ is pause symbol - keep or replace with text like "Paused"
+					track_label.set_text(_("⏸ Paused • %s behind live").printf(format_time(behind)));
 				} else {
-					track_label.set_text("⏸ Paused • LIVE");
+					// TRANSLATORS: Status when paused but at live edge of stream
+					// ⏸ is pause symbol - keep or replace with text
+					// LIVE indicates at the live broadcast point
+					track_label.set_text(_("⏸ Paused • LIVE"));
 				}
 			} catch (Error e) {
-				track_label.set_text("⏸ Paused");
+				// TRANSLATORS: Simple paused status when time info unavailable
+				// ⏸ is pause symbol
+				track_label.set_text(_("⏸ Paused"));
 				paused_update_timeout = 0;
 				return false;
 			}
@@ -680,7 +714,9 @@ namespace BudgieRadio {
 		private string format_time(int64 seconds) {
 			int mins = (int)(seconds / 60);
 			int secs = (int)(seconds % 60);
-			return @"$(mins):$(secs.to_string().printf("%02d"))";
+			// TRANSLATORS: Time format - {0} is minutes, {1} is seconds (2 digits with leading zero)
+			// Example: "5:03" means 5 minutes 3 seconds
+			return _("%d:%02d").printf(mins, secs);
 		}
 
 		private void update_buffer_info() {
@@ -705,14 +741,26 @@ namespace BudgieRadio {
 				updating_scrubber = false;
 
 				// Show buffer info
-				string status = is_paused ? "⏸ Paused" : "▶ Playing";
+				// TRANSLATORS: Playback status indicator - ▶ is play symbol
+				string status = is_paused ? _("⏸ Paused") : _("▶ Playing");
 				string live_status;
 				if (behind_live > 0) {
-					live_status = @"$(format_time(behind_live)) behind live";
+					// TRANSLATORS: Shows time delay from live broadcast
+					// {time} is formatted as MM:SS
+					live_status = _("%s behind live").printf(format_time(behind_live));
 				} else {
-					live_status = "● LIVE";
+					// TRANSLATORS: Indicator that playback is at live broadcast point
+					// ● is a bullet point/dot symbol to indicate "live" status
+					live_status = _("● LIVE");
 				}
-				buffer_label.set_text(@"$status • $live_status • Buffer: $(format_time(buffer_duration))");
+				// TRANSLATORS: Buffer status line format
+				// {status} is "Playing" or "Paused", {live} is live lag time, {buffer} is total buffer size
+				// Example: "▶ Playing • 2:30 behind live • Buffer: 15:00"
+				buffer_label.set_text(_("%s • %s • Buffer: %s").printf(
+					status,
+					live_status,
+					format_time(buffer_duration)
+				));
 			} catch (Error e) {
 				warning("Failed to get buffer info: %s", e.message);
 			}
@@ -777,23 +825,28 @@ namespace BudgieRadio {
 			if (is_playing && !is_paused) {
 				// Playing state
  				toggle_button.set_image(stop_icon);
- 				toggle_button.set_tooltip_text("Stop playback");
+				// TRANSLATORS: Tooltip for stop button when music is playing
+ 				toggle_button.set_tooltip_text(_("Stop playback"));
 				pause_button.set_image(pause_icon);
-				pause_button.set_tooltip_text("Pause playback");
+				// TRANSLATORS: Tooltip for pause button when able to pause
+				pause_button.set_tooltip_text(_("Pause playback"));
 				pause_button.set_sensitive(true);
  				station_icon.get_style_context().remove_class("dim-label");
 			} else if (is_paused) {
 				// Paused state
 				toggle_button.set_image(stop_icon);
-				toggle_button.set_tooltip_text("Stop playback");
+				// TRANSLATORS: Tooltip for stop button when paused
+				toggle_button.set_tooltip_text(_("Stop playback"));
 				pause_button.set_image(play_icon);
-				pause_button.set_tooltip_text("Resume playback");
+				// TRANSLATORS: Tooltip for resume button when paused
+				pause_button.set_tooltip_text(_("Resume playback"));
 				pause_button.set_sensitive(true);
 				station_icon.get_style_context().add_class("dim-label");
  			} else {
 				// Stopped state
  				toggle_button.set_image(play_icon);
- 				toggle_button.set_tooltip_text("Play last station");
+				// TRANSLATORS: Tooltip for play button when nothing playing
+ 				toggle_button.set_tooltip_text(_("Play last station"));
 				pause_button.set_sensitive(false);
  				station_icon.get_style_context().add_class("dim-label");
 			}
@@ -920,7 +973,9 @@ namespace BudgieRadio {
 
 			if (name != "") {
 				station_label.set_text(name);
-				codec_label.set_text(@"$codec $bitrate kbps");
+				// TRANSLATORS: Technical info for last played station
+				// {codec} is audio format, {bitrate} is quality in kbps
+				codec_label.set_text(_("%s %d kbps").printf(codec, bitrate));
 
 				if (favicon != "") {
 					load_icon_async(favicon);
@@ -929,7 +984,8 @@ namespace BudgieRadio {
 
 			// Ensure menu button stays disabled (no UUID yet)
 			favorites_menu_button.set_sensitive(false);
-			favorites_menu_button.set_tooltip_text("Play from browser to add to presets");
+			// TRANSLATORS: Tooltip explaining why + button is disabled
+			favorites_menu_button.set_tooltip_text(_("Play from browser to add to presets"));
 		}
 
 		private void on_browse_clicked() {

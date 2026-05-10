@@ -15,6 +15,8 @@ import threading
 import asyncio
 import tempfile
 import os
+import gettext
+import locale
 from pathlib import Path
 from typing import Optional
 
@@ -31,9 +33,15 @@ except ImportError:
     print("Warning: 'radios' library not found.")
     print("Install with: sudo apt install python3-radios")
 
+# Setup translations
+locale.setlocale(locale.LC_ALL, '')
+gettext.bindtextdomain('budgie-radio-widget', '/usr/share/locale')
+gettext.textdomain('budgie-radio-widget')
+_ = gettext.gettext
+
 # Default values for missing station data
-DEFAULT_STATION_NAME = "Unknown Station"
-DEFAULT_CODEC = "Unknown"
+DEFAULT_STATION_NAME = _("Unknown Station")
+DEFAULT_CODEC = _("Unknown")
 DEFAULT_COUNTRY = ""
 DEFAULT_FAVICON = ""
 DEFAULT_URL = ""
@@ -805,10 +813,10 @@ class RadioDaemon(dbus.service.Object):
 
             return {
                 'uuid': station_data.uuid,
-                'name': station_data.name or "Unknown Station",
+                'name': station_data.name or _("Unknown Station"),
                 'url': station_data.url_resolved or station_data.url or "",
                 'favicon': station_data.favicon or "",
-                'codec': station_data.codec or "Unknown",
+                'codec': station_data.codec or _("Unknown"),
                 'bitrate': dbus.Int32(station_data.bitrate or 0),
                 'country': station_data.country or "",
             }
