@@ -1,6 +1,6 @@
 project('budgie-radio-widget',
     ['vala', 'c'],
-    version: '0.0.1',
+    version: '1.0.0',
     meson_version: '>= 0.57.0',
     default_options: [
         'warning_level=2',
@@ -54,14 +54,3 @@ message('  Version:           @0@'.format(PROJECT_VERSION))
 message('  Prefix:            @0@'.format(PREFIX))
 message('  Binary directory:  @0@'.format(BINDIR))
 message('  Data directory:    @0@'.format(DATADIR))
-message('')
-message('After installation:')
-message('  1. Restart Budgie: budgie-panel --replace &')
-message('  2. Enable widget in Budgie Settings → Raven')
-message('  3. Run daemon: radio-daemon')
-message('  4. Or launch browser: budgie-radio-browser')
-message('')
-message('Translation:')
-message('  Update POT: ./po/update-pot.sh')
-message('  Pull translations: ./po/tx-pull.sh')
-message('')
