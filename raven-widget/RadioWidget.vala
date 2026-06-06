@@ -84,11 +84,66 @@ namespace BudgieRadio {
 			// THEN load presets (needs D-Bus)
 			load_all_presets();
 
+			// ensure we do a first check if playback is already happening
+			check_current_playback_state();
+
 			// Load last station from GSettings
 			load_last_station();
 
 			show_all();
 			update_visibility();
+		}
+
+		private void check_current_playback_state() {
+			try {
+				var proxy = bus_connection.get_proxy_sync<RadioDaemonProxy>(
+					"org.ubuntubudgie.radio",
+					"/org/ubuntubudgie/radio/Daemon"
+				);
+				string station = proxy.get_current_station();
+				if (station == "") {
+					return;
+				}
+
+				string uuid = proxy.get_current_station_uuid();
+				bool paused = proxy.is_paused();
+
+				is_playing = true;
+				is_paused = paused;
+				current_playing_uuid = uuid;
+
+				// Populate station label so UI isn't blank
+				station_label.set_text(station);
+
+				// Enable/disable + button
+				bool has_valid_uuid = (uuid != "" && uuid != "direct");
+				favorites_menu_button.set_sensitive(has_valid_uuid);
+				if (has_valid_uuid) {
+					favorites_menu_button.set_tooltip_text(_("Add to presets"));
+				} else {
+					favorites_menu_button.set_tooltip_text(_("Play from browser to add to presets"));
+				}
+
+				// Fetch last station details for codec label
+				var info = proxy.get_last_station();
+				if (info.contains("codec") && info.contains("bitrate")) {
+					string codec = info["codec"].get_string();
+					int bitrate = (int)info["bitrate"].get_int32();
+					codec_label.set_text(_("%s %d kbps").printf(codec, bitrate));
+				}
+
+				update_visibility();
+				update_preset_highlights();
+
+				// If paused, start the paused label updater
+				if (is_paused && paused_update_timeout == 0) {
+					paused_update_timeout = GLib.Timeout.add(1000, update_paused_label);
+					update_paused_label();
+				}
+
+			} catch (Error e) {
+				// Daemon not running - fine, widget starts in stopped state
+			}
 		}
 
 		private void build_header() {
@@ -403,17 +458,6 @@ namespace BudgieRadio {
 					button.set_tooltip_text(_("Station unavailable"));
 					button.set_sensitive(false);
 				}
-
-				// Subscribe to PlaybackPaused signal
-				playback_paused_subscription = bus_connection.signal_subscribe(
-					"org.ubuntubudgie.radio",
-					"org.ubuntubudgie.radio.Daemon",
-					"PlaybackPaused",
-					"/org/ubuntubudgie/radio/Daemon",
-					null,
-					GLib.DBusSignalFlags.NONE,
-					on_playback_paused_signal
-				);
 
 			} catch (Error e) {
 				warning("Failed to load preset info: %s", e.message);
@@ -1069,6 +1113,15 @@ interface RadioDaemonProxy : Object {
 
 	[DBus (name = "GetCurrentStationUUID")]
 	public abstract string get_current_station_uuid() throws Error;
+
+	[DBus (name = "GetCurrentStation")]
+	public abstract string get_current_station() throws Error;
+
+	[DBus (name = "IsPaused")]
+	public abstract bool is_paused() throws Error;
+
+	[DBus (name = "GetLastStation")]
+	public abstract HashTable<string, Variant> get_last_station() throws Error;
 }
 
 [ModuleInit]
